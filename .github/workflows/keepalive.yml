@@ -1,0 +1,16 @@
+# Бесплатный проект Supabase засыпает после недели без запросов. Раз в день стучимся в базу.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    steps:
+      - run: |
+          curl -fsS "${{ vars.VITE_SUPABASE_URL }}/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: ${{ vars.VITE_SUPABASE_ANON_KEY }}" -o /dev/null -w "HTTP %{http_code}\n"
