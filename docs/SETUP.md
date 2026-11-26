@@ -23,7 +23,7 @@ npm run dev          # откроется http://localhost:5173 в демо-ре
 
 1. Слева **SQL Editor** → **New query**.
 2. Скопируй туда весь файл [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql) и нажми **Run**. Должно быть `Success. No rows returned`.
-3. Создай первый инвайт, он сделает тебя админом сети. В новом запросе (код придумай свой):
+3. Создай первый инвайт, он сделает тебя админом сети. В новом запросе (код придумай свой, заглавными латинскими буквами и цифрами):
 
    ```sql
    insert into invites (code, grants_admin, max_uses) values ('MOJ-KOD-1234', true, 1);

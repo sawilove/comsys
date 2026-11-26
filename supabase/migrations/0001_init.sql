@@ -40,7 +40,7 @@ create trigger on_auth_user_created
 
 -- ───────────────────────── Инвайты в сеть ─────────────────────────
 create table public.invites (
-  code         text primary key,
+  code         text primary key check (code = upper(code)),  -- коды хранятся заглавными, ввод без учёта регистра
   created_by   uuid references public.profiles (id) on delete set null,
   max_uses     int  not null default 1 check (max_uses > 0),
   uses         int  not null default 0,
@@ -362,7 +362,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_admin boolean;
 begin
   update invites set uses = uses + 1
-   where code = upper(trim(p_code)) and uses < max_uses and (expires_at is null or expires_at > now())
+   where upper(code) = upper(trim(p_code)) and uses < max_uses and (expires_at is null or expires_at > now())
   returning grants_admin into v_admin;
   if not found then raise exception 'invalid invite'; end if;
   return v_admin;
@@ -370,7 +370,7 @@ end $$;
 
 create function public.release_invite(p_code text) returns void
 language sql security definer set search_path = public as $$
-  update invites set uses = greatest(uses - 1, 0) where code = upper(trim(p_code));
+  update invites set uses = greatest(uses - 1, 0) where upper(code) = upper(trim(p_code));
 $$;
 revoke execute on function public.claim_invite(text) from public, anon, authenticated;
 revoke execute on function public.release_invite(text) from public, anon, authenticated;
