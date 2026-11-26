@@ -1,0 +1,6 @@
+# Настройки для Supabase CLI (supabase functions deploy).
+[functions.redeem-invite]
+verify_jwt = false   # вызывается до входа: у гостя ещё нет токена
+
+[functions.media]
+verify_jwt = true
