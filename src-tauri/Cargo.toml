@@ -1,6 +1,6 @@
 [package]
 name = "comsys"
-version = "0.2.1"
+version = "0.2.2"
 description = "COMSYS messenger"
 license = "AGPL-3.0-only"
 repository = "https://github.com/sawilove/comsys"
