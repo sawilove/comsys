@@ -9,12 +9,13 @@
     size = 40,
     radius = '50%',
     color,
-  }: { id: string; name: string; url?: string | null; size?: number; radius?: string; color?: string } = $props();
+    crop,
+  }: { id: string; name: string; url?: string | null; size?: number; radius?: string; color?: string; crop?: unknown } = $props();
 </script>
 
 <div class="av" style:width={size + 'px'} style:height={size + 'px'} style:border-radius={radius}
   style:background={profileAccent(color) ?? colorFor(id)} style:font-size={size * 0.4 + 'px'}>
-  <ProfileImage reference={url}>
+  <ProfileImage reference={url} {crop}>
     {#snippet fallback()}{initials(name)}{/snippet}
   </ProfileImage>
 </div>

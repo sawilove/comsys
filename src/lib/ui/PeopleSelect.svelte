@@ -32,7 +32,7 @@
 <div class="people scroll">
   {#each people as p (p.id)}
     <button type="button" class="person" class:on={selected.includes(p.id)} onclick={() => toggle(p)}>
-      <Avatar id={p.id} name={p.display_name} url={p.avatar_url} size={36} />
+      <Avatar id={p.id} name={p.display_name} url={p.avatar_url} crop={p.profile?.avatarCrop} size={36} />
       <div class="n"><b>{p.display_name}</b><span class="muted">@{p.username}</span></div>
       {#if !single}<span class="box">{#if selected.includes(p.id)}<Icon name="check" size={14} stroke={3} />{/if}</span>{/if}
     </button>

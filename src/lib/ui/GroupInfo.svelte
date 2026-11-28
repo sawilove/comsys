@@ -49,7 +49,7 @@
         {#each members as m (m.user_id)}
           {@const p = app.profiles[m.user_id]}
           <div class="person">
-            <Avatar id={m.user_id} name={p?.display_name ?? '?'} url={p?.avatar_url} size={36} />
+            <Avatar id={m.user_id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={36} />
             <div class="n"><b>{m.nickname || p?.display_name}</b><span class="muted">@{p?.username}</span></div>
             {#if group.owner_id === m.user_id}<span class="tag">владелец</span>{/if}
             {#if m.user_id !== app.meId}

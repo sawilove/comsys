@@ -26,7 +26,7 @@
       {@const id = partner.id}
       <button type="button" class="partner" aria-label={'Открыть профиль ' + partner.display_name}
         onclick={() => ui.open({ type: 'profile', userId: id })}>
-        <Avatar {id} name={partner.display_name} url={partner.avatar_url} size={36} />
+        <Avatar {id} name={partner.display_name} url={partner.avatar_url} crop={partner.profile?.avatarCrop} size={36} />
         <span class="t">
           <b>{partner.display_name}</b>
           <span class="muted">@{partner.username}</span>
