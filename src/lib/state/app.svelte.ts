@@ -5,9 +5,10 @@
 // 2) голосовое заливается в хранилище; 3) строка пишется в messages (повтор не дублирует);
 // 4) Realtime рассылает тем, кто в сети; 5) вернувшись в сеть, клиент забирает всё после курсора.
 import { ulid } from 'ulid';
-import { api, ApiError, type Attachment, type Channel, type Group, type Member, type Message, type Profile } from '../api';
+import { api, ApiError, type Attachment, type Channel, type Group, type Member, type Message, type Profile, type ReadReceipt } from '../api';
 import { cache, type OutboxItem } from './cache';
 import { notify } from '../util/notify';
+import { messageSummary } from '../util/format';
 
 type SendState = 'sending' | 'failed';
 
@@ -35,6 +36,7 @@ class AppState {
   last = $state<Record<string, Message>>({});
   unread = $state<Record<string, number>>({});
   sendState = $state<Record<string, SendState>>({});
+  receipts = $state<Record<string, Record<string, ReadReceipt>>>({});
 
   /** Что открыто: groupId = null значит «Личные». */
   groupId = $state<string | null>(null);
@@ -46,6 +48,9 @@ class AppState {
   private cursor: string | null = null;
   private unsub: (() => void) | null = null;
   private flushing = false;
+  private flushRequested = false;
+  private sendingReceipts = new Set<string>();
+  private pendingReceipts = new Map<string, Message>();
   private localBlobs = new Map<string, string>(); // id сообщения → objectURL до загрузки
   private wasOnline = false;
 
@@ -100,6 +105,68 @@ class AppState {
   }
 
   // ───────────── вход ─────────────
+  readCount(message: Message) {
+    const members = this.membersOf(message.group_id);
+    return Object.values(this.receipts[message.channel_id] ?? {}).filter((receipt) =>
+      receipt.user_id !== this.meId && members.some((member) => member.user_id === receipt.user_id)
+      && (receipt.message_at > message.created_at || (receipt.message_at === message.created_at && receipt.message_id >= message.id)),
+    ).length;
+  }
+
+  private receiveReceipt(receipt: ReadReceipt) {
+    const at = new Date(receipt.message_at).toISOString();
+    if (!this.receipts[receipt.channel_id]) this.receipts[receipt.channel_id] = {};
+    const channel = this.receipts[receipt.channel_id];
+    const current = channel[receipt.user_id];
+    if (!current || current.message_at < at || (current.message_at === at && current.message_id < receipt.message_id)) {
+      channel[receipt.user_id] = { ...receipt, message_at: at };
+    }
+  }
+
+  private async loadReceipts(channelId: string) {
+    const account = this.meId;
+    try {
+      const receipts = await api.listReceipts(channelId);
+      if (this.meId === account) for (const receipt of receipts) this.receiveReceipt(receipt);
+    } catch (error) {
+      if (this.online) console.warn('Could not fetch read receipts', error);
+    }
+  }
+
+  seeMessages(messages: Message[]) {
+    if (!this.meId || api.kind === 'demo' || document.visibilityState !== 'visible') return;
+    const message = messages.filter((m) => m.author_id !== this.meId && this.channelId === m.channel_id).sort(byTime).at(-1);
+    if (!message) return;
+    const current = this.receipts[message.channel_id]?.[this.meId];
+    if (current && (current.message_at > message.created_at
+      || (current.message_at === message.created_at && current.message_id >= message.id))) return;
+    const pending = this.pendingReceipts.get(message.channel_id);
+    if (!pending || byTime(pending, message) < 0) this.pendingReceipts.set(message.channel_id, message);
+    if (this.online) void this.sendReceipt(message.channel_id);
+  }
+
+  private async sendReceipt(channelId: string) {
+    const userId = this.meId;
+    if (!userId || this.sendingReceipts.has(channelId)) return;
+    this.sendingReceipts.add(channelId);
+    try {
+      while (this.meId === userId) {
+        const message = this.pendingReceipts.get(channelId);
+        if (!message) break;
+        this.pendingReceipts.delete(channelId);
+        try {
+          await api.markMessageRead(message.id);
+          if (this.meId === userId) this.receiveReceipt({ channel_id: channelId, user_id: userId, message_id: message.id, message_at: message.created_at });
+        } catch {
+          if (this.meId === userId && !this.pendingReceipts.has(channelId)) this.pendingReceipts.set(channelId, message);
+          break;
+        }
+      }
+    } finally {
+      this.sendingReceipts.delete(channelId);
+    }
+  }
+
   async start() {
     try {
       this.meId = await api.currentUserId();
@@ -140,7 +207,10 @@ class AppState {
     this.unsub = null;
     await api.signOut();
     await cache.clear();
-    Object.assign(this, { profiles: {}, groups: [], channels: [], members: [], messages: {}, last: {}, unread: {}, sendState: {} });
+    for (const url of this.localBlobs.values()) URL.revokeObjectURL(url);
+    this.localBlobs.clear();
+    Object.assign(this, { profiles: {}, groups: [], channels: [], members: [], messages: {}, last: {}, unread: {}, sendState: {}, receipts: {} });
+    this.pendingReceipts.clear();
     this.lastRead = {};
     this.cursor = null;
     this.groupId = null;
@@ -180,6 +250,7 @@ class AppState {
     this.unsub?.();
     this.unsub = api.subscribe({
       onMessage: (m) => this.ingest([m], true),
+      onReceipt: (receipt) => this.receiveReceipt(receipt),
       onStructureChanged: () => void this.refreshStructure(),
       onStatus: (ok) => {
         this.online = ok;
@@ -204,6 +275,8 @@ class AppState {
     if (!this.meId) return;
     try {
       await this.refreshStructure();
+      if (this.channelId) void this.loadReceipts(this.channelId);
+      for (const channelId of this.pendingReceipts.keys()) void this.sendReceipt(channelId);
       await this.catchUp();
       await this.flushOutbox();
     } catch (e) {
@@ -265,7 +338,7 @@ class AppState {
     const group = this.groups.find((g) => g.id === m.group_id) ?? null;
     const who = this.nameOf(m.author_id, m.group_id);
     const title = group?.kind === 'group' ? `${who} · ${this.groupTitle(group)}` : who;
-    notify(title, m.kind === 'voice' ? '🎤 Голосовое сообщение' : m.body, () => {
+    notify(title, messageSummary(m), () => {
       this.openGroup(m.group_id);
       void this.openChannel(m.channel_id);
     });
@@ -313,6 +386,7 @@ class AppState {
     if (!ch) return;
     if (this.groups.find((g) => g.id === ch.group_id)?.kind === 'group') this.groupId = ch.group_id;
     this.channelId = channelId;
+    if (api.kind === 'supabase') void this.loadReceipts(channelId);
     if (showOnMobile) this.mobilePane = 'chat';
     this.saveView();
     if (!this.messages[channelId]) {
@@ -362,6 +436,12 @@ class AppState {
     await this.enqueue({ kind: 'voice', body: '', attachments: [att], reply_to: null }, blob, mime);
   }
 
+  async sendMedia(file: File, caption: string, replyTo: string | null) {
+    if (!this.channelId) return;
+    const att: Attachment = { provider: 'demo', key: '', mime: file.type, size: file.size };
+    await this.enqueue({ kind: 'media', body: caption.trim(), attachments: [att], reply_to: replyTo }, file, file.type);
+  }
+
   private async enqueue(part: Pick<Message, 'kind' | 'body' | 'attachments' | 'reply_to'>, blob?: Blob, mime?: string) {
     const ch = this.currentChannel!;
     const m: Message = {
@@ -389,6 +469,9 @@ class AppState {
 
   async discard(id: string) {
     await cache.removeOutbox(id);
+    const url = this.localBlobs.get(id);
+    if (url) URL.revokeObjectURL(url);
+    this.localBlobs.delete(id);
     delete this.sendState[id];
     for (const arr of Object.values(this.messages)) {
       const i = arr.findIndex((m) => m.id === id);
@@ -397,7 +480,10 @@ class AppState {
   }
 
   async flushOutbox() {
-    if (this.flushing) return;
+    if (this.flushing) {
+      this.flushRequested = true;
+      return;
+    }
     this.flushing = true;
     try {
       const items = (await cache.outbox()).sort((a, b) => (a.message.id < b.message.id ? -1 : 1));
@@ -414,6 +500,10 @@ class AppState {
       }
     } finally {
       this.flushing = false;
+      if (this.flushRequested) {
+        this.flushRequested = false;
+        void this.flushOutbox();
+      }
     }
   }
 
@@ -433,6 +523,11 @@ class AppState {
       reply_to: m.reply_to,
     });
     await cache.removeOutbox(m.id);
+    if (m.kind === 'media' && api.kind === 'supabase') {
+      const url = this.localBlobs.get(m.id);
+      this.localBlobs.delete(m.id);
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
     await this.ingest([saved], false);
   }
 

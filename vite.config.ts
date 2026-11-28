@@ -4,17 +4,23 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // BASE_PATH=/comsys/ для GitHub Pages (адрес вида sawilove.github.io/comsys/).
 const base = process.env.BASE_PATH || '/';
-
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const native = mode === 'native' || process.env.TAURI_ENV_PLATFORM !== undefined;
+  return {
   base,
+  define: { __COMSYS_NATIVE__: JSON.stringify(native), __COMSYS_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.2.0') },
   plugins: [
     svelte(),
-    VitePWA({
+    !native && VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'C-COMSYS',
-        short_name: 'C-COMSYS',
+        name: 'COMSYS',
+        short_name: 'COMSYS',
         description: 'Закрытый мессенджер для своих',
         lang: 'ru',
         theme_color: '#121218',
@@ -28,12 +34,10 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallback: `${base}index.html`,
-        // Запросы к Supabase не кэшируем: свежесть данных обеспечивает синхронизация.
-        runtimeCaching: [],
       },
     }),
   ],
+  };
 });

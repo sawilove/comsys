@@ -1,0 +1,20 @@
+[package]
+name = "comsys"
+version = "0.2.0"
+description = "COMSYS messenger"
+license = "AGPL-3.0-only"
+repository = "https://github.com/sawilove/comsys"
+edition = "2024"
+rust-version = "1.90"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "=2.7.6"
+
+[dependencies]
+tauri = "=2.12.7"

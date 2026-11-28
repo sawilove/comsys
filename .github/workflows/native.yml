@@ -1,0 +1,139 @@
+name: Native release
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/native.yml', 'package.json']
+  workflow_dispatch:
+
+concurrency:
+  group: native-release
+  cancel-in-progress: false
+
+env:
+  VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+  VITE_MEDIA_PROVIDER: ${{ vars.VITE_MEDIA_PROVIDER }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: rustup toolchain install stable --profile minimal
+      - run: npm ci
+      - run: npm run tauri -- icon public/favicon.svg
+      - run: npm run tauri -- build --ci --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: rustup toolchain install stable --profile minimal
+      - run: rustup target add aarch64-linux-android
+      - name: Select installed Android NDK
+        run: echo "NDK_HOME=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run tauri -- android init --ci --skip-targets-install
+      - name: Enable voice recording
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src-tauri/gen/android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          if 'android.permission.RECORD_AUDIO' not in text:
+              text = text.replace('<application', '<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <application', 1)
+              path.write_text(text)
+          PY
+      - run: npm run tauri -- icon public/favicon.svg
+      - run: npm run tauri -- android build --ci --debug --apk --target aarch64
+      - name: Verify and name APK
+        run: |
+          apk=$(find src-tauri/gen/android -name '*.apk' -print -quit)
+          test -n "$apk"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$apksigner" verify "$apk"
+          cp "$apk" COMSYS-android-arm64-preview.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: COMSYS-android-arm64-preview.apk
+          if-no-files-found: error
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: rustup toolchain install stable --profile minimal
+      - run: rustup target add aarch64-apple-ios
+      - run: brew install xcodegen
+      - run: npm ci
+      - run: npm run tauri -- ios init --ci --skip-targets-install
+      - run: npm run tauri -- icon public/favicon.svg
+      - run: npm run build:native
+      - name: Build an unsigned IPA for sideloading
+        run: |
+          export CI=true
+          project=$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' -print -quit)
+          test -n "$project"
+          scheme=$(xcodebuild -list -json -project "$project" | python3 -c 'import sys,json; print(next(s for s in json.load(sys.stdin)["project"]["schemes"] if s.lower().endswith("ios")))')
+          xcodebuild -project "$project" -scheme "$scheme" -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/comsys-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+          app=$(find "$RUNNER_TEMP/comsys-ios/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          mkdir Payload
+          cp -R "$app" Payload/
+          zip -qry COMSYS-ios-unsigned.ipa Payload
+          unzip -t COMSYS-ios-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: COMSYS-ios-unsigned.ipa
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, android, ios]
+    if: ${{ !cancelled() && (needs.windows.result == 'success' || needs.android.result == 'success' || needs.ios.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish native preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v${version}-native-preview"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "COMSYS $version · Native Preview" --prerelease --notes "Первая тестовая сборка COMSYS. Windows: установщик без подписи. Android ARM64: APK с отладочной подписью. iOS: неподписанный IPA для подписи приложением, через которое устанавливается IPA. Доступные сборки перечислены во вложениях."
+          fi
+          for asset in release-assets/*; do
+            if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fxq "$(basename "$asset")"; then
+              gh release upload "$tag" "$asset"
+            fi
+          done

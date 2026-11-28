@@ -1,3 +1,5 @@
+import type { Message } from '../api/types';
+
 export function timeHM(iso: string) {
   return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
@@ -56,4 +58,10 @@ export function describeError(e: unknown): string {
   const code = (e as { code?: string })?.code;
   if (code && errorText[code]) return errorText[code];
   return (e as Error)?.message || 'Что-то пошло не так';
+}
+export function messageSummary(message: Message) {
+  if (message.deleted_at) return 'Сообщение удалено';
+  if (message.kind === 'voice') return 'Голосовое сообщение';
+  if (message.kind === 'media') return message.body || (message.attachments[0]?.mime.startsWith('video/') ? 'Видео' : 'Фото');
+  return message.body;
 }

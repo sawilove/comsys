@@ -34,13 +34,26 @@ export class VoiceRecorder {
 
   async start() {
     this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: {
+        channelCount: { ideal: 1 }, sampleRate: { ideal: 48_000 },
+        echoCancellation: true, noiseSuppression: false, autoGainControl: false,
+      },
     });
     const mime = pickMime();
-    this.rec = new MediaRecorder(this.stream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
-    this.chunks = [];
-    this.rec.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
-    this.rec.start(250);
+    try {
+      try {
+        this.rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}),
+          audioBitsPerSecond: mime.startsWith('audio/mp4') ? 128_000 : 96_000 });
+      } catch {
+        this.rec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
+      }
+      this.chunks = [];
+      this.rec.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
+      this.rec.start(250);
+    } catch (error) {
+      this.cleanup();
+      throw error;
+    }
     this.startedAt = performance.now();
 
     try {
@@ -73,10 +86,13 @@ export class VoiceRecorder {
     const rec = this.rec;
     if (!rec) return null;
     const durationMs = performance.now() - this.startedAt;
-    const done = new Promise<void>((r) => (rec.onstop = () => r()));
-    if (rec.state !== 'inactive') rec.stop();
-    await done;
-    const mime = (rec.mimeType || pickMime() || 'audio/webm').split(';')[0];
+    if (rec.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        rec.addEventListener('stop', () => resolve(), { once: true });
+        rec.stop();
+      });
+    }
+    const mime = (rec.mimeType || this.chunks[0]?.type || pickMime() || 'audio/webm').split(';')[0];
     const blob = new Blob(this.chunks, { type: mime });
     const waveform = downsample(this.levels, BARS);
     this.cleanup();

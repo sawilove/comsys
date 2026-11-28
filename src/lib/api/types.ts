@@ -9,6 +9,7 @@ export interface Profile {
   profile: { v: number; accent?: string; banner?: string; bio?: string; [k: string]: unknown };
   status: 'online' | 'idle' | 'dnd' | 'invisible';
   is_admin: boolean;
+  is_developer?: boolean;
 }
 
 export type ProfilePatch = Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'profile' | 'status'>>;
@@ -49,7 +50,13 @@ export interface Attachment {
   waveform?: number[];
 }
 
-export type MessageKind = 'text' | 'voice';
+export type MessageKind = 'text' | 'voice' | 'media';
+export interface ReadReceipt {
+  channel_id: string;
+  user_id: string;
+  message_id: string;
+  message_at: string;
+}
 
 export interface Message {
   id: string; // ULID, создаётся на клиенте
@@ -72,6 +79,7 @@ export interface NetworkSnapshot {
 }
 
 export interface RealtimeHandlers {
+  onReceipt(receipt: ReadReceipt): void;
   onMessage(m: Message): void;
   /** Изменились группы, каналы или состав участников: перечитать снапшот. */
   onStructureChanged(): void;
@@ -112,6 +120,8 @@ export interface Backend {
   fetchSince(since: string | null, limit: number): Promise<Message[]>;
   /** История канала до `before` (для прокрутки вверх). */
   fetchHistory(channelId: string, before: string | null, limit: number): Promise<Message[]>;
+  listReceipts(channelId: string): Promise<ReadReceipt[]>;
+  markMessageRead(messageId: string): Promise<void>;
   sendMessage(m: NewMessage): Promise<Message>;
   editMessage(id: string, body: string): Promise<void>;
   deleteMessage(id: string): Promise<void>;
