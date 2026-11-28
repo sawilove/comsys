@@ -257,8 +257,9 @@
     background: var(--bg-elev); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 2px 12px rgba(0,0,0,.12);
   }
   textarea {
-    flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; padding: 9px 0; max-height: 180px;
-    line-height: 1.4; font-size: 15px;
+    flex: 1; min-width: 0; min-height: 40px; max-height: 180px; margin: 0; appearance: none;
+    resize: none; border: 0; outline: none; background: transparent; padding: 9px 0;
+    line-height: 22px; font-size: 15px;
   }
   textarea::placeholder { color: var(--text-faint); }
   .send {
@@ -277,5 +278,10 @@
   .live span { width: 3px; flex: none; border-radius: 2px; background: var(--accent); }
   .limit { font-size: 12px; flex: none; }
   @keyframes blink { 50% { opacity: .3; } }
-  @media (max-width: 760px) { .composer { padding-left: 10px; padding-right: 10px; } .bar { gap: 5px; padding-left: 6px; } .limit { display: none; } }
+  @media (max-width: 760px) {
+    .composer { padding-left: 10px; padding-right: 10px; }
+    .bar { gap: 5px; padding-left: 6px; }
+    textarea { font-size: 16px; }
+    .limit { display: none; }
+  }
 </style>

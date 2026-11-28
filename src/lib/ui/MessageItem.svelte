@@ -106,7 +106,8 @@
         else oncontext(event.clientX, event.clientY);
       }}>
       {#if !mine && showAuthor && !continued}
-        <div class="author" style:color={profileAccent(author?.profile?.accent) ?? colorFor(m.author_id)}>{name}</div>
+        <button type="button" class="author" disabled={!author} style:color={profileAccent(author?.profile?.accent) ?? colorFor(m.author_id)}
+          aria-label={'Открыть профиль ' + name} onclick={() => ui.open({ type: 'profile', userId: m.author_id })}>{name}</button>
       {/if}
       {#if reply}
         <div class="quote">
@@ -175,7 +176,8 @@
   .media .text, .media .author { display: block; padding: 4px 4px 0; }
   .media .meta { margin: 5px 4px 1px 8px; color: var(--text-muted); opacity: 1; }
   .bubble.deleted { opacity: .7; }
-  .author { font-size: 13px; font-weight: 700; margin-bottom: 1px; }
+  .author { display: block; max-width: 100%; text-align: left; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; margin-bottom: 1px; }
+  .author:hover { text-decoration: underline; }
   .text { white-space: pre-wrap; }
   .text a { color: inherit; text-decoration: underline; }
   .quote {

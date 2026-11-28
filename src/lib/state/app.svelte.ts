@@ -38,6 +38,7 @@ class AppState {
   unread = $state<Record<string, number>>({});
   sendState = $state<Record<string, SendState>>({});
   receipts = $state<Record<string, Record<string, ReadReceipt>>>({});
+  pinsRevision = $state(0);
 
   /** Что открыто: groupId = null значит «Личные». */
   groupId = $state<string | null>(null);
@@ -250,9 +251,13 @@ class AppState {
   private connect() {
     this.unsub?.();
     this.unsub = api.subscribe({
-      onMessage: (m) => this.ingest([m], true),
+      onMessage: (m) => {
+        this.ingest([m], true);
+        if (m.channel_id === this.channelId && (m.deleted_at || m.edited_at)) this.pinsRevision++;
+      },
       onReceipt: (receipt) => this.receiveReceipt(receipt),
       onPresence: (row) => presence.receive(row),
+      onPinsChanged: () => { this.pinsRevision++; },
       onStructureChanged: () => void this.refreshStructure(),
       onStatus: (ok) => {
         this.online = ok;
@@ -275,6 +280,7 @@ class AppState {
   /** Подписка уже есть: забираем всё, что пропустили, и досылаем очередь. */
   async resync() {
     if (!this.meId) return;
+    this.pinsRevision++;
     try {
       await this.refreshStructure();
       void presence.refresh();

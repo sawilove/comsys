@@ -4,6 +4,7 @@
   import Modal from './Modal.svelte';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
+  import PresenceLabel from './PresenceLabel.svelte';
   import PeopleSelect from './PeopleSelect.svelte';
   import { describeError } from '../util/format';
 
@@ -49,8 +50,16 @@
         {#each members as m (m.user_id)}
           {@const p = app.profiles[m.user_id]}
           <div class="person">
-            <Avatar id={m.user_id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={36} />
-            <div class="n"><b>{m.nickname || p?.display_name}</b><span class="muted">@{p?.username}</span></div>
+            <button type="button" class="member-profile" disabled={!p}
+              aria-label={'Открыть профиль ' + app.nameOf(m.user_id, groupId)}
+              onclick={() => ui.open({ type: 'profile', userId: m.user_id })}>
+              <Avatar id={m.user_id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={36} />
+              <span class="n">
+                <b>{app.nameOf(m.user_id, groupId)}</b>
+                {#if p}<span class="muted">@{p.username}</span>{/if}
+                <PresenceLabel userId={m.user_id} />
+              </span>
+            </button>
             {#if group.owner_id === m.user_id}<span class="tag">владелец</span>{/if}
             {#if m.user_id !== app.meId}
               <button type="button" class="icon-btn" title="Написать лично" onclick={() => run(async () => { await app.openDM(m.user_id); ui.close(); })}><Icon name="chat" size={16} /></button>
@@ -98,7 +107,10 @@
   .tabs button.on { background: var(--accent-soft); color: var(--accent); }
   .list { display: flex; flex-direction: column; gap: 2px; }
   .person { display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
+  .member-profile { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; text-align: left; }
+  .member-profile:hover b { text-decoration: underline; }
   .n { flex: 1; display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+  .n b { overflow-wrap: anywhere; }
   .n span { font-size: 12.5px; }
   .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
   .form { display: flex; flex-direction: column; gap: 18px; }

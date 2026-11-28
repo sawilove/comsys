@@ -77,6 +77,13 @@ export interface Message {
   deleted_at: string | null;
 }
 
+export interface ProfileMessageCounts {
+  text: number;
+  voice: number;
+  photo: number;
+  video: number;
+}
+
 export interface NetworkSnapshot {
   groups: Group[];
   channels: Channel[];
@@ -86,6 +93,7 @@ export interface NetworkSnapshot {
 export interface RealtimeHandlers {
   onReceipt(receipt: ReadReceipt): void;
   onPresence(presence: UserPresence): void;
+  onPinsChanged(): void;
   onMessage(m: Message): void;
   /** Изменились группы, каналы или состав участников: перечитать снапшот. */
   onStructureChanged(): void;
@@ -126,6 +134,10 @@ export interface Backend {
   fetchSince(since: string | null, limit: number): Promise<Message[]>;
   /** История канала до `before` (для прокрутки вверх). */
   fetchHistory(channelId: string, before: string | null, limit: number): Promise<Message[]>;
+  profileMessageCounts(channelId: string, userId: string): Promise<ProfileMessageCounts>;
+  profileAttachments(channelId: string, userId: string, offset: number, limit: number): Promise<Message[]>;
+  listPins(channelId: string): Promise<Message[]>;
+  setPinned(message: Message, pinned: boolean): Promise<void>;
   listReceipts(channelId: string): Promise<ReadReceipt[]>;
   markMessageRead(messageId: string): Promise<void>;
   listPresence(): Promise<UserPresence[]>;

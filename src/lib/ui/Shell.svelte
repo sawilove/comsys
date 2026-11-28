@@ -11,9 +11,29 @@
   import Settings from './Settings.svelte';
   import Modal from './Modal.svelte';
   import ProfileCard from './ProfileCard.svelte';
+  import ProfileActivity from './ProfileActivity.svelte';
   import MediaViewer from './MediaViewer.svelte';
   import Icon from './Icon.svelte';
   import { presence } from '../state/presence.svelte';
+  import { describeError } from '../util/format';
+
+  async function writeTo(userId: string) {
+    try {
+      await app.openDM(userId);
+      ui.close();
+    } catch (error) {
+      ui.say(describeError(error));
+    }
+  }
+
+  async function copyUsername(username: string) {
+    try {
+      await navigator.clipboard.writeText(`@${username}`);
+      ui.say('Ник скопирован');
+    } catch {
+      ui.say('Не удалось скопировать ник');
+    }
+  }
 
   onMount(() => presence.track());
 </script>
@@ -47,6 +67,17 @@
   {#if person}
     <Modal title="Профиль" onclose={() => ui.close()}>
       <ProfileCard {person} />
+      <div class="profile-actions">
+        {#if person.id !== app.meId}
+          <button type="button" class="btn" onclick={() => writeTo(person.id)}><Icon name="chat" size={18} /> Написать</button>
+        {/if}
+        <button type="button" class="btn ghost" onclick={() => copyUsername(person.username)}><Icon name="copy" size={18} /> Скопировать ник</button>
+      </div>
+      {#if app.currentChannel?.kind === 'text'}
+        {#key `${app.currentChannel.id}:${person.id}`}
+          <ProfileActivity channelId={app.currentChannel.id} userId={person.id} />
+        {/key}
+      {/if}
     </Modal>
   {/if}
 {/if}
@@ -61,6 +92,7 @@
   .empty h2 { margin: 12px 0 0; font-size: 20px; }
   .empty p { margin: 0 0 14px; }
   .bubble { width: 72px; height: 72px; border-radius: 24px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .toast {
     position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60;
     background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; box-shadow: var(--shadow);

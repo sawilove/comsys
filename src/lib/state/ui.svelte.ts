@@ -5,7 +5,7 @@ export type ModalKind =
   | { type: 'new-dm' }
   | { type: 'group-info'; groupId: string }
   | { type: 'profile'; userId: string }
-  | { type: 'media'; message: Message; attachment: Attachment }
+  | { type: 'media'; message: Message; attachment: Attachment; returnToProfile?: string }
   | { type: 'settings' };
 
 class UiState {
@@ -14,10 +14,14 @@ class UiState {
   private t: ReturnType<typeof setTimeout> | null = null;
 
   open(m: ModalKind) {
-    this.modal = m;
+    this.modal = m.type === 'media' && this.modal?.type === 'profile'
+      ? { ...m, returnToProfile: this.modal.userId }
+      : m;
   }
   close() {
-    this.modal = null;
+    this.modal = this.modal?.type === 'media' && this.modal.returnToProfile
+      ? { type: 'profile', userId: this.modal.returnToProfile }
+      : null;
   }
   say(text: string) {
     this.toast = text;

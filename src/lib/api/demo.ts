@@ -24,6 +24,7 @@ interface DB {
   channels: Channel[];
   members: Member[];
   messages: Message[];
+  pins?: Record<string, string>;
 }
 
 const KEY = 'comsys-demo-db';
@@ -260,6 +261,41 @@ export class DemoBackend implements Backend {
   async fetchHistory(channelId: string, before: string | null, limit: number) {
     const all = this.db.messages.filter((m) => m.channel_id === channelId && (!before || m.created_at < before));
     return structuredClone(all.slice(-limit));
+  }
+
+  private profileMessages(channelId: string, userId: string) {
+    return this.db.messages.filter((m) => m.channel_id === channelId && m.author_id === userId && !m.deleted_at && this.visible(m));
+  }
+
+  async profileMessageCounts(channelId: string, userId: string) {
+    const messages = this.profileMessages(channelId, userId);
+    return {
+      text: messages.filter((m) => m.kind === 'text').length,
+      voice: messages.filter((m) => m.kind === 'voice').length,
+      photo: messages.filter((m) => m.kind === 'media' && m.attachments[0]?.mime.startsWith('image/')).length,
+      video: messages.filter((m) => m.kind === 'media' && m.attachments[0]?.mime.startsWith('video/')).length,
+    };
+  }
+
+  async profileAttachments(channelId: string, userId: string, offset: number, limit: number) {
+    const messages = this.profileMessages(channelId, userId).filter((m) => m.kind !== 'text');
+    return structuredClone(messages.reverse().slice(offset, offset + limit));
+  }
+
+  async listPins(channelId: string) {
+    const pins = this.db.pins ?? {};
+    const messages = this.db.messages.filter((m) => m.channel_id === channelId && !m.deleted_at && pins[m.id] && this.visible(m));
+    return structuredClone(messages.sort((a, b) => pins[b.id].localeCompare(pins[a.id]) || b.id.localeCompare(a.id)));
+  }
+
+  async setPinned(message: Message, pinned: boolean) {
+    const stored = this.db.messages.find((m) => m.id === message.id && m.channel_id === message.channel_id);
+    if (!stored || stored.deleted_at || !this.visible(stored)) throw new ApiError('forbidden');
+    const pins = this.db.pins ??= {};
+    if (pinned) pins[stored.id] ??= now();
+    else delete pins[stored.id];
+    this.save();
+    for (const h of this.handlers) h.onPinsChanged();
   }
 
   async sendMessage(n: NewMessage): Promise<Message> {
