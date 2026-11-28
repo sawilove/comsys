@@ -11,6 +11,9 @@ export interface Profile {
   is_admin: boolean;
 }
 
+export type ProfilePatch = Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'profile' | 'status'>>;
+export type ProfileImages = { avatar?: File | null; banner?: File | null };
+
 export interface Group {
   id: string;
   kind: 'group' | 'dm';
@@ -93,7 +96,8 @@ export interface Backend {
   signOut(): Promise<void>;
 
   listProfiles(): Promise<Profile[]>;
-  updateMyProfile(patch: Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'profile' | 'status'>>): Promise<void>;
+  updateMyProfile(patch: ProfilePatch, images?: ProfileImages): Promise<void>;
+  profileImageUrl(reference: string): Promise<string>;
   snapshot(): Promise<NetworkSnapshot>;
 
   createGroup(name: string, memberIds: string[]): Promise<string>;

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { ui } from '../state/ui.svelte';
+  import { profileAccent } from '../util/profile';
   import type { Message } from '../api';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
@@ -41,14 +43,19 @@
 <div class="row" class:mine class:continued class:selected>
   {#if !mine && showAuthor}
     <div class="avcol">
-      {#if !continued}<Avatar id={m.author_id} name={name} url={author?.avatar_url} color={author?.profile?.accent} size={34} />{/if}
+      {#if !continued}
+        <button type="button" disabled={!author} aria-label={'Открыть профиль ' + name}
+          onclick={() => ui.open({ type: 'profile', userId: m.author_id })}>
+          <Avatar id={m.author_id} name={name} url={author?.avatar_url} color={author?.profile?.accent} size={34} />
+        </button>
+      {/if}
     </div>
   {/if}
   <div class="stack">
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="bubble" class:voice={m.kind === 'voice'} class:deleted={m.deleted_at} onclick={onselect}>
       {#if !mine && showAuthor && !continued}
-        <div class="author" style="color:{author?.profile?.accent ?? colorFor(m.author_id)}">{name}</div>
+        <div class="author" style:color={profileAccent(author?.profile?.accent) ?? colorFor(m.author_id)}>{name}</div>
       {/if}
       {#if reply}
         <div class="quote">

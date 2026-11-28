@@ -22,7 +22,7 @@ npm run dev          # откроется http://localhost:5173 в демо-ре
 ## 2. База данных
 
 1. Слева **SQL Editor** → **New query**.
-2. Скопируй туда весь файл [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.sql) и нажми **Run**. Должно быть `Success. No rows returned`.
+2. Выполни SQL-файлы из [`supabase/migrations`](../supabase/migrations) по порядку, начиная с `0001_init.sql`. Открывай отдельный запрос для каждого файла.
 3. Создай первый инвайт, он сделает тебя админом сети. В новом запросе (код придумай свой, заглавными латинскими буквами и цифрами):
 
    ```sql

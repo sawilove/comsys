@@ -23,11 +23,15 @@
   <header>
     <button type="button" class="icon-btn back" onclick={back} aria-label="Назад"><Icon name="back" size={22} /></button>
     {#if partner}
-      <Avatar id={partner.id} name={partner.display_name} url={partner.avatar_url} size={36} />
-      <div class="t">
-        <b>{partner.display_name}</b>
-        <span class="muted">@{partner.username}</span>
-      </div>
+      {@const id = partner.id}
+      <button type="button" class="partner" aria-label={'Открыть профиль ' + partner.display_name}
+        onclick={() => ui.open({ type: 'profile', userId: id })}>
+        <Avatar {id} name={partner.display_name} url={partner.avatar_url} size={36} />
+        <span class="t">
+          <b>{partner.display_name}</b>
+          <span class="muted">@{partner.username}</span>
+        </span>
+      </button>
     {:else}
       <span class="hash"><Icon name="hash" size={22} /></span>
       <div class="t">
@@ -53,6 +57,7 @@
     border-bottom: 1px solid var(--border); z-index: 2;
   }
   .t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+  .partner { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; }
   .t b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .t span { font-size: 12.5px; }
   .hash { color: var(--text-faint); display: grid; }

@@ -2,6 +2,7 @@ export type ModalKind =
   | { type: 'create-group' }
   | { type: 'new-dm' }
   | { type: 'group-info'; groupId: string }
+  | { type: 'profile'; userId: string }
   | { type: 'settings' };
 
 class UiState {

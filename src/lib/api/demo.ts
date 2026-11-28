@@ -11,8 +11,11 @@ import {
   type Message,
   type NewMessage,
   type Profile,
+  type ProfileImages,
+  type ProfilePatch,
   type RealtimeHandlers,
 } from './types';
+import { profileImageExtension } from '../util/profile';
 
 interface DB {
   me: string | null;
@@ -122,10 +125,32 @@ export class DemoBackend implements Backend {
     return structuredClone(this.db.profiles);
   }
 
-  async updateMyProfile(patch: Partial<Profile>) {
-    const p = this.db.profiles.find((x) => x.id === this.me())!;
-    Object.assign(p, patch);
-    this.save();
+  async updateMyProfile(patch: ProfilePatch, images: ProfileImages = {}) {
+    const me = this.me();
+    const current = this.db.profiles.find((p) => p.id === me)!;
+    const next = { ...current, ...patch, profile: { ...current.profile, ...patch.profile } };
+    const encode = (file: File) => {
+      profileImageExtension(file);
+      if (file.size > 1024 * 1024) throw new Error('В демо-режиме размер изображения ограничен 1 МБ');
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    };
+    if (images.avatar !== undefined) next.avatar_url = images.avatar ? await encode(images.avatar) : null;
+    if (images.banner !== undefined) {
+      if (images.banner) next.profile.banner = await encode(images.banner);
+      else delete next.profile.banner;
+    }
+    const profiles = this.db.profiles.map((p) => p.id === me ? next : p);
+    localStorage.setItem(KEY, JSON.stringify({ ...this.db, profiles }));
+    this.db.profiles = profiles;
+  }
+
+  async profileImageUrl(reference: string) {
+    return /^(https:\/\/|data:image\/(?:jpeg|png|webp|gif);base64,)/i.test(reference) ? reference : '';
   }
 
   async snapshot() {
