@@ -7,13 +7,14 @@
   import ThemeSettings from './ThemeSettings.svelte';
   import Icon from './Icon.svelte';
   import BrandMark from './BrandMark.svelte';
-  import { askNotificationPermission, notificationsSupported } from '../util/notify';
+  import { askNotificationPermission, isDesktopSoundAvailable, notificationsSupported, playNotificationSound, setSoundEnabled, soundEnabled } from '../util/notify';
   import { describeError } from '../util/format';
 
   let invite = $state('');
   let uses = $state(1);
   let busy = $state(false);
   let notif = $state(notificationsSupported() ? Notification.permission : 'unsupported');
+  let sound = $state(soundEnabled());
 
   async function makeInvite() {
     busy = true;
@@ -42,13 +43,22 @@
   {#if app.me}<ProfileSettings person={app.me} />{/if}
   <ThemeSettings />
 
-  {#if notif !== 'unsupported'}
+  {#if notif !== 'unsupported' || isDesktopSoundAvailable()}
     <section>
       <h3><Icon name="bell" size={16} /> Уведомления</h3>
       {#if notif === 'granted'}
         <p class="muted small">Включены. Пока приходят, когда приложение открыто или свёрнуто.</p>
-      {:else}
+      {:else if notif !== 'unsupported'}
         <button type="button" class="btn ghost" onclick={async () => (notif = await askNotificationPermission())}>Включить уведомления</button>
+      {/if}
+      {#if isDesktopSoundAvailable()}
+        <div class="sound">
+          <label><input type="checkbox" bind:checked={sound} onchange={() => {
+            setSoundEnabled(sound);
+            if (sound) void playNotificationSound(true);
+          }} /> Звук новых сообщений</label>
+          <button type="button" class="btn ghost" disabled={!sound} onclick={() => { void playNotificationSound(true); }}>Прослушать</button>
+        </div>
       {/if}
     </section>
   {/if}
@@ -101,6 +111,8 @@
   .small { font-size: 12.5px; margin: 8px 0 0; }
   .about-brand, .links { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
   .about-brand .small { margin: 0; }
+  .sound { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+  .sound input { accent-color: var(--accent); }
   .links { margin-top: 10px; font-size: 13px; }
   .invite { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--accent-soft); }
   .invite code { font-size: 17px; font-weight: 700; letter-spacing: .08em; }

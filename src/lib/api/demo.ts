@@ -129,6 +129,10 @@ export class DemoBackend implements Backend {
     return [];
   }
 
+  async listPresence() { return []; }
+
+  async touchPresence() {}
+
   async markMessageRead() {
     // В демо нет второго подключённого клиента.
   }

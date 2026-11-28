@@ -9,7 +9,7 @@
 <nav class="rail scroll" aria-label="Группы">
   <button type="button" class="item" class:active={app.groupId === null} onclick={() => app.openGroup(null)} title="Личные сообщения">
     <span class="pill"></span>
-    <span class="home"><BrandMark size={42} /></span>
+    <span class="home brand"><BrandMark size={46} /></span>
     {#if app.dmUnread}<span class="badge">{app.dmUnread}</span>{/if}
   </button>
   <div class="sep"></div>
@@ -49,6 +49,8 @@
     background: var(--bg-elev); color: var(--text-muted); transition: border-radius .2s, background .2s, color .2s;
   }
   .item.active .home { border-radius: 16px; background: var(--accent); color: #fff; }
+  .item .home.brand { overflow: hidden; border-radius: 12px; background: none; }
+  .item.active .home.brand { outline: 1px solid var(--accent); outline-offset: 2px; }
   .add .home { color: var(--success); }
   .pill {
     position: absolute; left: 0; width: 4px; height: 0; border-radius: 0 4px 4px 0; background: var(--text); transition: height .2s;

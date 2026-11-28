@@ -12,6 +12,7 @@ import {
   type ProfilePatch,
   type RealtimeHandlers,
   type ReadReceipt,
+  type UserPresence,
 } from './types';
 import { MEDIA_PROVIDER, SUPABASE_ANON_KEY, SUPABASE_URL, USERNAME_EMAIL_DOMAIN } from './config';
 import { PROFILE_MEDIA_BUCKET, PROFILE_MEDIA_PREFIX, profileImageExtension } from '../util/profile';
@@ -219,6 +220,14 @@ export class SupabaseBackend implements Backend {
     this.check(await this.sb.rpc('mark_message_read', { p_message: messageId }));
   }
 
+  async listPresence() {
+    return this.check(await this.sb.from('user_presence').select('user_id,last_seen_at,last_active_at')) as UserPresence[];
+  }
+
+  async touchPresence(activeAgeSeconds: number) {
+    this.check(await this.sb.rpc('touch_presence', { p_active_age_seconds: activeAgeSeconds }));
+  }
+
   async editMessage(id: string, body: string) {
     this.check(await this.sb.from('messages').update({ body }).eq('id', id));
   }
@@ -269,6 +278,9 @@ export class SupabaseBackend implements Backend {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => h.onStructureChanged())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'read_receipts' }, ({ new: row }) => {
         if ('message_id' in row) h.onReceipt(row as ReadReceipt);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, ({ new: row }) => {
+        if ('last_seen_at' in row) h.onPresence(row as UserPresence);
       })
       .subscribe((status) => h.onStatus(status === 'SUBSCRIBED'));
     return () => {

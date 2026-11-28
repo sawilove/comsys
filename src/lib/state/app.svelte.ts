@@ -7,8 +7,9 @@
 import { ulid } from 'ulid';
 import { api, ApiError, type Attachment, type Channel, type Group, type Member, type Message, type Profile, type ReadReceipt } from '../api';
 import { cache, type OutboxItem } from './cache';
-import { notify } from '../util/notify';
+import { notify, playNotificationSound } from '../util/notify';
 import { messageSummary } from '../util/format';
+import { presence } from './presence.svelte';
 
 type SendState = 'sending' | 'failed';
 
@@ -251,6 +252,7 @@ class AppState {
     this.unsub = api.subscribe({
       onMessage: (m) => this.ingest([m], true),
       onReceipt: (receipt) => this.receiveReceipt(receipt),
+      onPresence: (row) => presence.receive(row),
       onStructureChanged: () => void this.refreshStructure(),
       onStatus: (ok) => {
         this.online = ok;
@@ -275,6 +277,7 @@ class AppState {
     if (!this.meId) return;
     try {
       await this.refreshStructure();
+      void presence.refresh();
       if (this.channelId) void this.loadReceipts(this.channelId);
       for (const channelId of this.pendingReceipts.keys()) void this.sendReceipt(channelId);
       await this.catchUp();
@@ -334,7 +337,9 @@ class AppState {
   }
 
   private maybeNotify(m: Message) {
-    if (this.channelId === m.channel_id && document.visibilityState === 'visible') return;
+    if (this.channelId === m.channel_id && document.visibilityState === 'visible' && document.hasFocus()
+      && (!matchMedia('(max-width: 760px)').matches || this.mobilePane === 'chat')) return;
+    void playNotificationSound();
     const group = this.groups.find((g) => g.id === m.group_id) ?? null;
     const who = this.nameOf(m.author_id, m.group_id);
     const title = group?.kind === 'group' ? `${who} · ${this.groupTitle(group)}` : who;

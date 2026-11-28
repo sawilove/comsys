@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { app } from '../state/app.svelte';
   import { ui } from '../state/ui.svelte';
   import type { Message } from '../api';
   import Icon from './Icon.svelte';
+  import EmojiMenu from './EmojiMenu.svelte';
   import { VoiceRecorder, canRecord, MAX_VOICE_MS } from '../media/recorder';
   import { describeError, duration, messageSummary } from '../util/format';
 
@@ -14,6 +15,8 @@
   let picker = $state<HTMLInputElement>();
   let media = $state<{ file: File; url: string } | null>(null);
   let sendingMedia = $state(false);
+  let emojis = $state(false);
+  let composer = $state<HTMLDivElement>();
   const accepted = 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime';
   let rec: VoiceRecorder | null = null;
   let recording = $state(false);
@@ -112,6 +115,18 @@
     media = null;
   }
 
+  async function addEmoji(emoji: string) {
+    const start = ta?.selectionStart ?? text.length;
+    const end = ta?.selectionEnd ?? start;
+    if (text.length - (end - start) + emoji.length > 4000) return;
+    text = text.slice(0, start) + emoji + text.slice(end);
+    emojis = false;
+    saveDraft();
+    await tick();
+    ta?.focus();
+    ta?.setSelectionRange(start + emoji.length, start + emoji.length);
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey && !isTouch && !e.isComposing) {
       e.preventDefault();
@@ -159,7 +174,11 @@
   onDestroy(() => { rec?.cancel(); clearMedia(); });
 </script>
 
-<div class="composer">
+<svelte:window onpointerdown={(event) => {
+  if (emojis && event.target instanceof Node && !composer?.contains(event.target)) emojis = false;
+}} onkeydown={(event) => { if (event.key === 'Escape') emojis = false; }} />
+<div class="composer" bind:this={composer}>
+  {#if emojis && !recording}<EmojiMenu onpick={(emoji) => { void addEmoji(emoji); }} />{/if}
   {#if replyTo || editing}
     <div class="ctx">
       <Icon name={editing ? 'edit' : 'reply'} size={18} />
@@ -210,6 +229,8 @@
         oninput={saveDraft}
         maxlength="4000"
       ></textarea>
+      <button type="button" class="icon-btn emoji-button" aria-label="Эмодзи" title="Эмодзи" aria-expanded={emojis}
+        onclick={() => { emojis = !emojis; }}><Icon name="smile" size={21} /></button>
       {#if text.trim() || editing || media}
         <button type="button" class="send" disabled={sendingMedia} onclick={submit} aria-label="Отправить"><Icon name={editing ? 'check' : 'send'} size={20} /></button>
       {:else}
@@ -220,7 +241,7 @@
 </div>
 
 <style>
-  .composer { flex: none; padding: 8px 16px calc(12px + env(safe-area-inset-bottom)); max-width: 920px; width: 100%; margin: 0 auto; }
+  .composer { position: relative; flex: none; padding: 8px 16px calc(12px + env(safe-area-inset-bottom)); max-width: 920px; width: 100%; margin: 0 auto; }
   .ctx {
     display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; margin-bottom: 6px;
     background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; color: var(--accent);
@@ -229,7 +250,8 @@
   .ctx-t b { color: var(--accent); }
   .ctx-t span { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .attachment img, .attachment video { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
-  .attach { flex: none; height: 40px; }
+  .attach, .emoji-button { flex: none; height: 40px; }
+  .emoji-button[aria-expanded="true"] { color: var(--accent); }
   .bar {
     display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 16px; min-height: 52px;
     background: var(--bg-elev); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 2px 12px rgba(0,0,0,.12);

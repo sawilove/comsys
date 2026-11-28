@@ -20,11 +20,39 @@
   let atBottom = true;
   let loadingOlder = false;
   let selected = $state<string | null>(null);
+  let menu = $state<{ x: number; y: number } | null>(null);
+  let menuElement = $state<HTMLDivElement>();
   const mobile = new MediaQuery('(hover: none), (max-width: 760px)');
 
   const list = $derived(app.messages[channelId] ?? []);
   const byId = $derived(new Map(list.map((m) => [m.id, m])));
   const active = $derived(selected ? byId.get(selected) : undefined);
+
+  function closeActions() {
+    selected = null;
+    menu = null;
+  }
+
+  async function openContext(message: Message, x: number, y: number) {
+    selected = message.id;
+    menu = { x, y };
+    await tick();
+    if (!menuElement || !menu) return;
+    menu = {
+      x: Math.max(8, Math.min(x, innerWidth - menuElement.offsetWidth - 8)),
+      y: Math.max(8, Math.min(y, innerHeight - menuElement.offsetHeight - 8)),
+    };
+    menuElement.querySelector('button')?.focus({ preventScroll: true });
+  }
+
+  function menuKeys(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeActions();
+    if (!menuElement || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+    event.preventDefault();
+    const actions = [...menuElement.querySelectorAll('button')];
+    const current = actions.indexOf(document.activeElement as HTMLButtonElement);
+    actions[(current + (event.key === 'ArrowDown' ? 1 : -1) + actions.length) % actions.length]?.focus();
+  }
 
   const observed = new Map<Element, Message>();
   const visible = new Set<Element>();
@@ -78,6 +106,7 @@
   });
 
   async function onscroll() {
+    if (menu) closeActions();
     atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (el.scrollTop < 120 && !loadingOlder && app.hasMore[channelId] !== false) {
       loadingOlder = true;
@@ -98,6 +127,9 @@
 </script>
 
 <svelte:document onvisibilitychange={reportVisible} />
+<svelte:window onpointerdown={(event) => {
+  if (menu && event.target instanceof Node && !menuElement?.contains(event.target)) closeActions();
+}} onkeydown={menuKeys} onresize={closeActions} />
 <div class="list scroll" bind:this={el} {onscroll}>
   <div class="inner">
     {#if app.hasMore[channelId] === false || list.length === 0}
@@ -120,28 +152,44 @@
         showAuthor={groupKind === 'group'}
         reply={m.reply_to ? byId.get(m.reply_to) : undefined}
         selected={selected === m.id}
-        onselect={() => (selected = selected === m.id ? null : m.id)}
-        onreply={() => { selected = null; onreply(m); }}
-        onedit={() => { selected = null; onedit(m); }}
-        onremove={() => { selected = null; void remove(m); }}
+        onselect={() => { if (selected === m.id) closeActions(); else selected = m.id; }}
+        oncontext={(x, y) => { void openContext(m, x, y); }}
+        onreply={() => { closeActions(); onreply(m); }}
+        onremove={() => { closeActions(); void remove(m); }}
       />
       </div>
     {/each}
   </div>
 </div>
-{#if mobile.current && active && !active.deleted_at && !app.sendState[active.id]}
-  <Modal title="Сообщение" onclose={() => { selected = null; }}>
-    <p class="action-preview muted">{messageSummary(active)}</p>
-    <div class="actions">
-      <button type="button" onclick={() => { selected = null; onreply(active); }}><Icon name="reply" /> Ответить</button>
-      {#if active.author_id === app.meId}
-        {#if active.kind === 'text'}
-          <button type="button" onclick={() => { selected = null; onedit(active); }}><Icon name="edit" /> Изменить</button>
-        {/if}
-        <button type="button" class="remove" onclick={() => { selected = null; void remove(active); }}><Icon name="trash" /> Удалить</button>
+{#snippet actions(message: Message)}
+  <div class="actions">
+    {#if message.kind === 'media' && message.attachments[0]}
+      <button type="button" onclick={() => {
+        const target = message;
+        closeActions();
+        ui.open({ type: 'media', message: target, attachment: target.attachments[0] });
+      }}><Icon name="play" size={17} /> Открыть вложение</button>
+    {/if}
+    <button type="button" onclick={() => { const target = message; closeActions(); onreply(target); }}><Icon name="reply" size={17} /> Ответить</button>
+    {#if message.author_id === app.meId}
+      {#if message.kind === 'text'}
+        <button type="button" onclick={() => { const target = message; closeActions(); onedit(target); }}><Icon name="edit" size={17} /> Изменить</button>
       {/if}
+      <button type="button" class="remove" onclick={() => { const target = message; closeActions(); void remove(target); }}><Icon name="trash" size={17} /> Удалить</button>
+    {/if}
+  </div>
+{/snippet}
+{#if active && !active.deleted_at && !app.sendState[active.id]}
+  {#if menu}
+    <div class="context-menu" role="group" aria-label="Действия с сообщением" bind:this={menuElement} style:left={menu.x + 'px'} style:top={menu.y + 'px'}>
+      {@render actions(active)}
     </div>
-  </Modal>
+  {:else if mobile.current}
+    <Modal title="Сообщение" onclose={closeActions}>
+      <p class="action-preview muted">{messageSummary(active)}</p>
+      {@render actions(active)}
+    </Modal>
+  {/if}
 {/if}
 
 <style>
@@ -155,5 +203,8 @@
   .actions { display: grid; gap: 4px; }
   .actions button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; text-align: left; border-radius: 10px; background: var(--bg-hover); }
   .actions .remove { color: var(--danger); }
+  .context-menu { position: fixed; z-index: 40; min-width: 180px; padding: 5px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elev); box-shadow: var(--shadow); }
+  .context-menu .actions button { min-height: 36px; background: transparent; }
+  .context-menu .actions button:hover, .context-menu .actions button:focus-visible { background: var(--bg-hover); }
   @media (max-width: 760px) { .inner { padding-inline: 10px; overflow-x: clip; } }
 </style>

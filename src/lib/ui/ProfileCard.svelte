@@ -5,6 +5,7 @@
   import { gradientBackground, profileAccent, profileBadges, profileGradient, type ProfileImageKind } from '../util/profile';
   import Avatar from './Avatar.svelte';
   import ProfileImage from './ProfileImage.svelte';
+  import PresenceLabel from './PresenceLabel.svelte';
 
   let { person, imageControl }: { person: Profile; imageControl?: Snippet<[ProfileImageKind]> } = $props();
   const color = $derived(profileAccent(person.profile?.accent) ?? colorFor(person.id));
@@ -26,6 +27,7 @@
     </div>
     <strong>{person.display_name}</strong>
     <span class="muted">@{person.username}{person.is_admin ? ' · админ сети' : ''}</span>
+    <PresenceLabel userId={person.id} />
     {#if person.is_developer}<span class="mark developer"><code>&lt;/&gt;</code> Разработчик</span>{/if}
     {#if badge}<span class="mark">{badge}</span>{/if}
     {#if person.profile?.bio}<p>{person.profile.bio}</p>{/if}

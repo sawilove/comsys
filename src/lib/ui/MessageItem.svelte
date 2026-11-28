@@ -17,8 +17,8 @@
     reply,
     selected,
     onselect,
+    oncontext,
     onreply,
-    onedit,
     onremove,
   }: {
     m: Message;
@@ -28,8 +28,8 @@
     reply: Message | undefined;
     selected: boolean;
     onselect: () => void;
+    oncontext: (x: number, y: number) => void;
     onreply: () => void;
-    onedit: () => void;
     onremove: () => void;
   } = $props();
 
@@ -92,16 +92,18 @@
   <div class="stack" style:transform={swipe ? `translateX(${swipe}px)` : undefined}>
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="bubble" class:voice={m.kind === 'voice'} class:deleted={m.deleted_at}
+      class:media={m.kind === 'media' && !!m.attachments[0] && !m.deleted_at}
       onpointerdown={startSwipe} onpointermove={moveSwipe} onpointerup={endSwipe} onpointercancel={endSwipe}
       onclick={(event) => {
         if (suppressTap) { suppressTap = false; return; }
-        if (!m.deleted_at && !sendSt && !interactive(event)) onselect();
+        if (!m.deleted_at && !sendSt && !interactive(event) && matchMedia('(pointer: coarse)').matches) onselect();
       }}
       oncontextmenu={(event) => {
-        if (!m.deleted_at && !sendSt && !interactive(event) && matchMedia('(hover: none)').matches) {
-          event.preventDefault();
-          if (!selected) onselect();
-        }
+        if (m.deleted_at || sendSt) return;
+        if (matchMedia('(pointer: coarse)').matches && interactive(event)) return;
+        event.preventDefault();
+        if (matchMedia('(pointer: coarse)').matches) { if (!selected) onselect(); }
+        else oncontext(event.clientX, event.clientY);
       }}>
       {#if !mine && showAuthor && !continued}
         <div class="author" style:color={profileAccent(author?.profile?.accent) ?? colorFor(m.author_id)}>{name}</div>
@@ -120,7 +122,7 @@
         {#if m.kind === 'media' && m.attachments[0]}
           <MessageMedia message={m} attachment={m.attachments[0]} />
         {/if}
-        <span class="text">{#each parts as p, i}{#if i % 2}<a href={p} target="_blank" rel="noopener noreferrer">{p}</a>{:else}{p}{/if}{/each}</span>
+        {#if m.body}<span class="text">{#each parts as p, i}{#if i % 2}<a href={p} target="_blank" rel="noopener noreferrer">{p}</a>{:else}{p}{/if}{/each}</span>{/if}
       {/if}
       <span class="meta">
         {#if m.edited_at && !m.deleted_at}<span>изм.</span>{/if}
@@ -141,12 +143,13 @@
     {/if}
   </div>
   {#if !m.deleted_at && !sendSt}
-    <button type="button" class="icon-btn mobile-tools" onclick={onselect} aria-label="Действия с сообщением"><Icon name="more" size={18} /></button>
-    <div class="tools">
-      <button type="button" class="icon-btn" onclick={onreply} title="Ответить" aria-label="Ответить"><Icon name="reply" size={16} /></button>
-      {#if mine && m.kind === 'text'}<button type="button" class="icon-btn" onclick={onedit} title="Изменить" aria-label="Изменить"><Icon name="edit" size={16} /></button>{/if}
-      {#if mine}<button type="button" class="icon-btn" onclick={onremove} title="Удалить" aria-label="Удалить"><Icon name="trash" size={16} /></button>{/if}
-    </div>
+    <button type="button" class="icon-btn action-trigger" onclick={(event) => {
+      if (matchMedia('(pointer: coarse)').matches) onselect();
+      else {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        oncontext(bounds.left, bounds.bottom);
+      }
+    }} aria-label="Действия с сообщением"><Icon name="more" size={18} /></button>
   {/if}
 </div>
 
@@ -168,6 +171,9 @@
   .row.mine:not(.continued) .bubble { border-bottom-right-radius: 6px; }
   .bubble.voice { padding: 8px 12px 8px 8px; min-width: 250px; }
   .bubble.voice .meta { position: absolute; right: 12px; bottom: 8px; margin: 0; }
+  .bubble.media, .mine .bubble.media { padding: 0; color: var(--text); background: transparent; box-shadow: none; }
+  .media .text, .media .author { display: block; padding: 4px 4px 0; }
+  .media .meta { margin: 5px 4px 1px 8px; color: var(--text-muted); opacity: 1; }
   .bubble.deleted { opacity: .7; }
   .author { font-size: 13px; font-weight: 700; margin-bottom: 1px; }
   .text { white-space: pre-wrap; }
@@ -186,17 +192,10 @@
   .swipe-reply.ready { background: var(--accent); color: var(--accent-text); }
   .failed { font-size: 12px; color: var(--danger); margin-top: 3px; }
   .failed button { color: var(--accent); font-weight: 600; font-size: 12px; }
-  .tools {
-    display: none; align-self: center; gap: 2px; padding: 2px; border-radius: 10px;
-    background: var(--bg-elev); border: 1px solid var(--border); box-shadow: var(--shadow);
-  }
-  .tools .icon-btn { width: 30px; height: 30px; }
-  @media (hover: hover) { .row:hover .tools { display: flex; } }
-  .row.selected .tools { display: flex; }
-  .mobile-tools { display: none; }
-  @media (hover: none), (max-width: 760px) {
-    .row .tools, .row.selected .tools, .row:hover .tools { display: none; }
-    .mobile-tools { display: inline-grid; width: 40px; height: 40px; flex: none; align-self: center; }
+  .action-trigger { opacity: 0; width: 34px; height: 34px; flex: none; align-self: center; pointer-events: none; }
+  .action-trigger:focus-visible { opacity: 1; pointer-events: auto; }
+  @media (pointer: coarse) {
+    .action-trigger { opacity: 1; pointer-events: auto; width: 40px; height: 40px; }
     .row { gap: 4px; }
     .bubble.voice { min-width: min(250px, 65vw); }
   }
