@@ -3,10 +3,12 @@
   import { MediaQuery } from 'svelte/reactivity';
   import { app } from '../state/app.svelte';
   import { ui } from '../state/ui.svelte';
-  import type { Message } from '../api';
+  import { api, type Message } from '../api';
   import MessageItem from './MessageItem.svelte';
   import Modal from './Modal.svelte';
   import Icon from './Icon.svelte';
+  import MessageMedia from './MessageMedia.svelte';
+  import VoicePlayer from './VoicePlayer.svelte';
   import { dayLabel, describeError, messageSummary } from '../util/format';
 
   let {
@@ -22,11 +24,49 @@
   let selected = $state<string | null>(null);
   let menu = $state<{ x: number; y: number } | null>(null);
   let menuElement = $state<HTMLDivElement>();
+  let pins = $state<Message[]>([]);
+  let showPins = $state(false);
+  let pinnedPreview = $state<Message | null>(null);
+  const changingPins = new Set<string>();
   const mobile = new MediaQuery('(hover: none), (max-width: 760px)');
 
   const list = $derived(app.messages[channelId] ?? []);
   const byId = $derived(new Map(list.map((m) => [m.id, m])));
   const active = $derived(selected ? byId.get(selected) : undefined);
+  const pinIds = $derived(new Set(pins.map((m) => m.id)));
+
+  $effect(() => {
+    void app.pinsRevision;
+    let current = true;
+    void api.listPins(channelId).then((rows) => {
+      if (current) pins = rows;
+    }).catch(() => { /* Будут загружены при следующем подключении. */ });
+    return () => { current = false; };
+  });
+
+  async function changePin(message: Message) {
+    if (changingPins.has(message.id)) return;
+    changingPins.add(message.id);
+    try {
+      await api.setPinned(message, !pinIds.has(message.id));
+      app.pinsRevision++;
+    } catch (error) {
+      ui.say(describeError(error));
+    } finally {
+      changingPins.delete(message.id);
+    }
+  }
+
+  function openPin(message: Message) {
+    showPins = false;
+    const node = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(message.id)}"]`);
+    if (node) {
+      node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      node.focus({ preventScroll: true });
+    } else {
+      pinnedPreview = message;
+    }
+  }
 
   function closeActions() {
     selected = null;
@@ -130,6 +170,15 @@
 <svelte:window onpointerdown={(event) => {
   if (menu && event.target instanceof Node && !menuElement?.contains(event.target)) closeActions();
 }} onkeydown={menuKeys} onresize={closeActions} />
+{#if pins[0]}
+  <div class="pins">
+    <button type="button" class="latest-pin" onclick={() => openPin(pins[0])}>
+      <Icon name="pin" size={18} />
+      <span><b>Закреплённое сообщение</b><span>{messageSummary(pins[0])}</span></span>
+    </button>
+    <button type="button" class="btn ghost" onclick={() => { showPins = true; }} aria-label={'Все закреплённые сообщения: ' + pins.length}>{pins.length}</button>
+  </div>
+{/if}
 <div class="list scroll" bind:this={el} {onscroll}>
   <div class="inner">
     {#if app.hasMore[channelId] === false || list.length === 0}
@@ -144,7 +193,7 @@
       {#if !prev || prev.created_at.slice(0, 10) !== m.created_at.slice(0, 10)}
         <div class="day"><span>{dayLabel(m.created_at)}</span></div>
       {/if}
-      <div use:observeRead={m}>
+      <div use:observeRead={m} data-message-id={m.id} tabindex="-1">
       <MessageItem
         {m}
         mine={m.author_id === app.meId}
@@ -171,6 +220,9 @@
       }}><Icon name="play" size={17} /> Открыть вложение</button>
     {/if}
     <button type="button" onclick={() => { const target = message; closeActions(); onreply(target); }}><Icon name="reply" size={17} /> Ответить</button>
+    <button type="button" onclick={() => { const target = message; closeActions(); void changePin(target); }}>
+      <Icon name="pin" size={17} /> {pinIds.has(message.id) ? 'Открепить' : 'Закрепить'}
+    </button>
     {#if message.author_id === app.meId}
       {#if message.kind === 'text'}
         <button type="button" onclick={() => { const target = message; closeActions(); onedit(target); }}><Icon name="edit" size={17} /> Изменить</button>
@@ -191,9 +243,42 @@
     </Modal>
   {/if}
 {/if}
+{#if showPins}
+  <Modal title="Закреплённые сообщения" onclose={() => { showPins = false; }}>
+    {#each pins as pin (pin.id)}
+      <div class="pin-item">
+        <button type="button" class="pin-link" onclick={() => openPin(pin)}>
+          <b>{app.nameOf(pin.author_id, pin.group_id)}</b><span>{messageSummary(pin)}</span>
+        </button>
+        <button type="button" class="icon-btn" onclick={() => changePin(pin)} aria-label={'Открепить ' + messageSummary(pin)}><Icon name="x" size={18} /></button>
+      </div>
+    {:else}
+      <p class="muted">В чате пока нет закрепов</p>
+    {/each}
+  </Modal>
+{/if}
+{#if pinnedPreview && !ui.modal}
+  {@const message = pinnedPreview}
+  <Modal title="Закреплённое сообщение" onclose={() => { pinnedPreview = null; }}>
+    <b>{app.nameOf(message.author_id, message.group_id)}</b>
+    {#if message.body}<p class="pin-body">{message.body}</p>{/if}
+    {#each message.attachments as attachment (attachment.key)}
+      {#if message.kind === 'voice'}<VoicePlayer {message} att={attachment} mine={message.author_id === app.meId} />
+      {:else}<MessageMedia {message} {attachment} />{/if}
+    {/each}
+  </Modal>
+{/if}
 
 <style>
   .list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pins { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 12px; background: var(--bg-elev); border-bottom: 1px solid var(--border); }
+  .latest-pin { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 4px; text-align: left; color: var(--accent); }
+  .latest-pin > span, .pin-link { min-width: 0; display: grid; text-align: left; }
+  .latest-pin > span > span, .pin-link > span { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .latest-pin b { font-size: 13px; }
+  .pin-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .pin-link { flex: 1; }
+  .pin-body { white-space: pre-wrap; overflow-wrap: anywhere; }
   .inner { margin-top: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; max-width: 920px; width: 100%; margin-left: auto; margin-right: auto; }
   .start { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 32px 0 24px; text-align: center; }
   .emoji { font-size: 40px; margin-bottom: 6px; }

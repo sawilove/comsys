@@ -43,11 +43,12 @@ class PresenceState {
   track() {
     let lastActive = Date.now();
     let lastAttempt = 0;
+    let lastRefresh = 0;
     let sending = false;
     const ping = async (force = false) => {
       const now = Date.now();
       this.now = now;
-      if (api.kind === 'demo' || sending || !navigator.onLine || (!force && now - lastAttempt < heartbeatMs)) return;
+      if (api.kind === 'demo' || sending || document.visibilityState !== 'visible' || (!force && now - lastAttempt < heartbeatMs)) return;
       lastAttempt = now;
       sending = true;
       try { await api.touchPresence(Math.floor((now - lastActive) / 1000)); } catch {}
@@ -59,20 +60,29 @@ class PresenceState {
       lastActive = Date.now();
       if (wasIdle || lastActive - lastAttempt >= heartbeatMs) void ping(wasIdle);
     };
-    const reconnect = () => { void ping(true); void this.refresh(); };
+    const refresh = () => {
+      lastRefresh = Date.now();
+      void this.refresh();
+    };
+    const reconnect = () => { void ping(true); refresh(); };
     const visibility = () => { if (document.visibilityState === 'visible') { activity(); reconnect(); } };
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'pointermove'] as const;
     for (const event of events) window.addEventListener(event, activity, { passive: true });
     window.addEventListener('focus', activity);
     window.addEventListener('online', reconnect);
+    window.addEventListener('pageshow', reconnect);
     document.addEventListener('visibilitychange', visibility);
-    const timer = window.setInterval(() => { void ping(); }, 10_000);
+    const timer = window.setInterval(() => {
+      void ping();
+      if (document.visibilityState === 'visible' && Date.now() - lastRefresh >= heartbeatMs) refresh();
+    }, 10_000);
     reconnect();
     return () => {
       window.clearInterval(timer);
       for (const event of events) window.removeEventListener(event, activity);
       window.removeEventListener('focus', activity);
       window.removeEventListener('online', reconnect);
+      window.removeEventListener('pageshow', reconnect);
       document.removeEventListener('visibilitychange', visibility);
       this.generation++;
       this.rows = {};

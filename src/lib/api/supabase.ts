@@ -201,6 +201,45 @@ export class SupabaseBackend implements Backend {
     return (this.check(await q) as Message[]).map(norm).reverse();
   }
 
+  async profileMessageCounts(channelId: string, userId: string) {
+    const query = () => this.sb.from('messages').select('id', { count: 'exact', head: true })
+      .eq('channel_id', channelId).eq('author_id', userId).is('deleted_at', null);
+    const results = await Promise.all([
+      query().eq('kind', 'text'),
+      query().eq('kind', 'voice'),
+      query().eq('kind', 'media').like('attachments->0->>mime', 'image/%'),
+      query().eq('kind', 'media').like('attachments->0->>mime', 'video/%'),
+    ]);
+    const [text, voice, photo, video] = results.map((result) => {
+      this.check(result);
+      return result.count ?? 0;
+    });
+    return { text, voice, photo, video };
+  }
+
+  async profileAttachments(channelId: string, userId: string, offset: number, limit: number) {
+    const rows = this.check(await this.sb.from('messages').select(MSG_COLUMNS)
+      .eq('channel_id', channelId).eq('author_id', userId).is('deleted_at', null).in('kind', ['media', 'voice'])
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + limit - 1)) as Message[];
+    return rows.map(norm);
+  }
+
+  async listPins(channelId: string) {
+    const rows = this.check(await this.sb.from('channel_message_pins')
+      .select(`message:messages!inner(${MSG_COLUMNS})`).eq('channel_id', channelId).eq('active', true).is('message.deleted_at', null)
+      .order('pinned_at', { ascending: false }).order('message_id', { ascending: false }));
+    return (rows as unknown as { message: Message }[]).map(({ message }) => norm(message));
+  }
+
+  async setPinned(message: Message, pinned: boolean) {
+    if (pinned) {
+      this.check(await this.sb.rpc('pin_channel_message', { p_message: message.id, p_channel: message.channel_id }));
+    } else {
+      this.check(await this.sb.from('channel_message_pins').update({ active: false })
+        .eq('message_id', message.id).eq('channel_id', message.channel_id));
+    }
+  }
+
   async sendMessage(m: NewMessage): Promise<Message> {
     const me = await this.currentUserId();
     const row = { ...m, author_id: me };
@@ -283,8 +322,13 @@ export class SupabaseBackend implements Backend {
         if ('last_seen_at' in row) h.onPresence(row as UserPresence);
       })
       .subscribe((status) => h.onStatus(status === 'SUBSCRIBED'));
+    const pins = this.sb.channel('comsys-pins')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'channel_message_pins' }, () => h.onPinsChanged())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'channel_message_pins' }, () => h.onPinsChanged())
+      .subscribe((status) => { if (status === 'SUBSCRIBED') h.onPinsChanged(); });
     return () => {
       this.sb.removeChannel(ch);
+      this.sb.removeChannel(pins);
     };
   }
 }
