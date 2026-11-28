@@ -164,14 +164,18 @@
 {#snippet actions(message: Message)}
   <div class="actions">
     {#if message.kind === 'media' && message.attachments[0]}
-      <button type="button" onclick={() => { closeActions(); ui.open({ type: 'media', message, attachment: message.attachments[0] }); }}><Icon name="play" size={17} /> Открыть вложение</button>
+      <button type="button" onclick={() => {
+        const target = message;
+        closeActions();
+        ui.open({ type: 'media', message: target, attachment: target.attachments[0] });
+      }}><Icon name="play" size={17} /> Открыть вложение</button>
     {/if}
-    <button type="button" onclick={() => { closeActions(); onreply(message); }}><Icon name="reply" size={17} /> Ответить</button>
+    <button type="button" onclick={() => { const target = message; closeActions(); onreply(target); }}><Icon name="reply" size={17} /> Ответить</button>
     {#if message.author_id === app.meId}
       {#if message.kind === 'text'}
-        <button type="button" onclick={() => { closeActions(); onedit(message); }}><Icon name="edit" size={17} /> Изменить</button>
+        <button type="button" onclick={() => { const target = message; closeActions(); onedit(target); }}><Icon name="edit" size={17} /> Изменить</button>
       {/if}
-      <button type="button" class="remove" onclick={() => { closeActions(); void remove(message); }}><Icon name="trash" size={17} /> Удалить</button>
+      <button type="button" class="remove" onclick={() => { const target = message; closeActions(); void remove(target); }}><Icon name="trash" size={17} /> Удалить</button>
     {/if}
   </div>
 {/snippet}
