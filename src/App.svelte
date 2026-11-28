@@ -6,6 +6,7 @@
   import Shell from './lib/ui/Shell.svelte';
   import BrandMark from './lib/ui/BrandMark.svelte';
   import { watchWebUpdates } from './lib/util/webUpdates';
+  import { unlockNotificationSound } from './lib/util/notify';
 
   let updateReady = $state(false);
   applyTheme(currentThemeId());
@@ -15,6 +16,7 @@
   });
 </script>
 
+<svelte:window onpointerdown={unlockNotificationSound} onkeydown={unlockNotificationSound} />
 {#if app.phase === 'loading'}
   <div class="splash"><BrandMark size={64} /></div>
 {:else if app.phase === 'auth'}

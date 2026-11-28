@@ -2,6 +2,7 @@
   import { app } from '../state/app.svelte';
   import { ui } from '../state/ui.svelte';
   import Avatar from './Avatar.svelte';
+  import PresenceLabel from './PresenceLabel.svelte';
   import Icon from './Icon.svelte';
   import { messageSummary, shortTime } from '../util/format';
   import type { Message } from '../api';
@@ -27,7 +28,10 @@
         {@const last = ch ? app.last[ch.id] : undefined}
         {@const n = app.groupUnread(g.id)}
         <button type="button" class="row" class:active={ch && app.channelId === ch.id} onclick={() => ch && app.openChannel(ch.id)}>
-          <Avatar id={p?.id ?? g.id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={44} />
+          <span class="person-avatar">
+            <Avatar id={p?.id ?? g.id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={44} />
+            {#if p}<span class="presence"><PresenceLabel userId={p.id} compact /></span>{/if}
+          </span>
           <div class="meta">
             <div class="top"><b>{app.groupTitle(g)}</b>{#if last}<span class="time">{shortTime(last.created_at)}</span>{/if}</div>
             <div class="bottom"><span class="prev">{preview(last, g.id)}</span>{#if n}<span class="badge">{n}</span>{/if}</div>
@@ -73,6 +77,8 @@
 </aside>
 
 <style>
+  .person-avatar { position: relative; flex: none; }
+  .presence { position: absolute; bottom: 0; right: 0; line-height: 1; }
   .side { width: 280px; flex: none; height: 100%; display: flex; flex-direction: column; background: var(--bg); border-right: 1px solid var(--border); }
   header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 12px 10px 18px; min-height: 60px; padding-top: calc(14px + env(safe-area-inset-top)); }
   h2 { margin: 0; font-size: 18px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

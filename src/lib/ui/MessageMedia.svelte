@@ -1,5 +1,7 @@
 <script lang="ts">
   import { app } from '../state/app.svelte';
+  import { ui } from '../state/ui.svelte';
+  import Icon from './Icon.svelte';
   import type { Message, Attachment } from '../api';
   let { message, attachment }: { message: Message; attachment: Attachment } = $props();
   let url = $state('');
@@ -22,19 +24,25 @@
 
 {#if failed}
   <button class="retry" type="button" onclick={() => { retry++; }}>Загрузить вложение ещё раз</button>
-{:else if url && video}
-  <!-- svelte-ignore a11y_media_has_caption (пользовательское вложение без дорожки субтитров) -->
-  <video src={url} controls playsinline preload="metadata" onerror={() => { failed = true; }} aria-label="Видео из чата"></video>
 {:else if url}
-  <a href={url} target="_blank" rel="noreferrer" aria-label="Открыть фото">
-    <img src={url} alt="Фото из чата" loading="lazy" onerror={() => { failed = true; }} />
-  </a>
+  <button class="preview" type="button" aria-label={video ? 'Открыть видео' : 'Открыть фото'}
+    onclick={() => ui.open({ type: 'media', message, attachment })}>
+    {#if video}
+      <!-- svelte-ignore a11y_media_has_caption (превью пользовательского вложения) -->
+      <video src={url} muted playsinline preload="metadata" aria-hidden="true"></video>
+      <span class="play"><Icon name="play" size={25} /></span>
+    {:else}
+      <img src={url} alt="" loading="lazy" onerror={() => { failed = true; }} />
+    {/if}
+  </button>
 {:else}
   <span class="muted">Загрузка вложения…</span>
 {/if}
 
 <style>
-  img, video { display: block; max-width: 100%; max-height: 360px; border-radius: 10px; object-fit: contain; }
-  a { display: block; }
+  .preview { display: block; position: relative; max-width: 100%; margin-inline: auto; overflow: hidden; border-radius: 14px; background: var(--bg-sunken); }
+  img, video { display: block; max-width: 100%; max-height: 360px; object-fit: contain; }
+  video { pointer-events: none; width: min(360px, 58vw); aspect-ratio: 16/9; }
+  .play { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #161321bc; color: white; }
   .retry { text-decoration: underline; }
 </style>

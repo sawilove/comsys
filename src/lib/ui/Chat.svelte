@@ -3,6 +3,7 @@
   import { ui } from '../state/ui.svelte';
   import Icon from './Icon.svelte';
   import Avatar from './Avatar.svelte';
+  import PresenceLabel from './PresenceLabel.svelte';
   import MessageList from './MessageList.svelte';
   import Composer from './Composer.svelte';
   import type { Message } from '../api';
@@ -29,7 +30,7 @@
         <Avatar {id} name={partner.display_name} url={partner.avatar_url} crop={partner.profile?.avatarCrop} size={36} />
         <span class="t">
           <b>{partner.display_name}</b>
-          <span class="muted">@{partner.username}</span>
+          <PresenceLabel userId={partner.id} />
         </span>
       </button>
     {:else}

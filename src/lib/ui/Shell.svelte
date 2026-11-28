@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { app } from '../state/app.svelte';
   import { ui } from '../state/ui.svelte';
   import Rail from './Rail.svelte';
@@ -10,7 +11,11 @@
   import Settings from './Settings.svelte';
   import Modal from './Modal.svelte';
   import ProfileCard from './ProfileCard.svelte';
+  import MediaViewer from './MediaViewer.svelte';
   import Icon from './Icon.svelte';
+  import { presence } from '../state/presence.svelte';
+
+  onMount(() => presence.track());
 </script>
 
 <div class="shell" class:chat-open={app.mobilePane === 'chat'}>
@@ -36,6 +41,7 @@
 {#if ui.modal?.type === 'new-dm'}<NewDM />{/if}
 {#if ui.modal?.type === 'group-info'}<GroupInfo groupId={ui.modal.groupId} />{/if}
 {#if ui.modal?.type === 'settings'}<Settings />{/if}
+{#if ui.modal?.type === 'media'}<MediaViewer message={ui.modal.message} attachment={ui.modal.attachment} />{/if}
 {#if ui.modal?.type === 'profile'}
   {@const person = app.profiles[ui.modal.userId]}
   {#if person}

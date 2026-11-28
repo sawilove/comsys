@@ -57,6 +57,11 @@ export interface ReadReceipt {
   message_id: string;
   message_at: string;
 }
+export interface UserPresence {
+  user_id: string;
+  last_seen_at: string;
+  last_active_at: string;
+}
 
 export interface Message {
   id: string; // ULID, создаётся на клиенте
@@ -80,6 +85,7 @@ export interface NetworkSnapshot {
 
 export interface RealtimeHandlers {
   onReceipt(receipt: ReadReceipt): void;
+  onPresence(presence: UserPresence): void;
   onMessage(m: Message): void;
   /** Изменились группы, каналы или состав участников: перечитать снапшот. */
   onStructureChanged(): void;
@@ -122,6 +128,8 @@ export interface Backend {
   fetchHistory(channelId: string, before: string | null, limit: number): Promise<Message[]>;
   listReceipts(channelId: string): Promise<ReadReceipt[]>;
   markMessageRead(messageId: string): Promise<void>;
+  listPresence(): Promise<UserPresence[]>;
+  touchPresence(activeAgeSeconds: number): Promise<void>;
   sendMessage(m: NewMessage): Promise<Message>;
   editMessage(id: string, body: string): Promise<void>;
   deleteMessage(id: string): Promise<void>;
