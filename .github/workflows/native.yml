@@ -1,3 +1,4 @@
+warning: in the working copy of '.github/workflows/native.yml', LF will be replaced by CRLF the next time Git touches it
 name: Native release
 
 on:
@@ -91,20 +92,14 @@ jobs:
       - run: npm ci
       - run: npm run tauri -- ios init --ci --skip-targets-install
       - run: npm run tauri -- icon public/favicon.svg
-      - run: npm run build:native
-      - name: Build an unsigned IPA for sideloading
+      - run: npm run tauri -- ios build --ci --target aarch64 --no-sign
+      - name: Verify and name IPA
         run: |
-          export CI=true
-          project=$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' -print -quit)
-          test -n "$project"
-          scheme=$(xcodebuild -list -json -project "$project" | python3 -c 'import sys,json; print(next(s for s in json.load(sys.stdin)["project"]["schemes"] if s.lower().endswith("ios")))')
-          xcodebuild -project "$project" -scheme "$scheme" -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/comsys-ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
-          app=$(find "$RUNNER_TEMP/comsys-ios/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)
-          test -n "$app"
-          mkdir Payload
-          cp -R "$app" Payload/
-          zip -qry COMSYS-ios-unsigned.ipa Payload
-          unzip -t COMSYS-ios-unsigned.ipa
+          ipa=$(find src-tauri/gen/apple -name '*.ipa' -print -quit)
+          test -n "$ipa"
+          unzip -t "$ipa"
+          unzip -Z1 "$ipa" | grep -E '^Payload/[^/]+\.app/Info\.plist$'
+          cp "$ipa" COMSYS-ios-unsigned.ipa
       - uses: actions/upload-artifact@v4
         with:
           name: ios
