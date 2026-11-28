@@ -5,12 +5,16 @@
   import type { Message } from '../api';
   import Icon from './Icon.svelte';
   import { VoiceRecorder, canRecord, MAX_VOICE_MS } from '../media/recorder';
-  import { describeError, duration } from '../util/format';
+  import { describeError, duration, messageSummary } from '../util/format';
 
   let { replyTo = $bindable(), editing = $bindable() }: { replyTo: Message | null; editing: Message | null } = $props();
 
   let text = $state('');
   let ta = $state<HTMLTextAreaElement>();
+  let picker = $state<HTMLInputElement>();
+  let media = $state<{ file: File; url: string } | null>(null);
+  let sendingMedia = $state(false);
+  const accepted = 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime';
   let rec: VoiceRecorder | null = null;
   let recording = $state(false);
   let elapsed = $state(0);
@@ -57,7 +61,7 @@
 
   async function submit() {
     const body = text.trim();
-    if (!body) return;
+    if ((!body && !media) || sendingMedia) return;
     if (editing) {
       const id = editing.id;
       editing = null;
@@ -70,11 +74,42 @@
       return;
     }
     const reply = replyTo?.id ?? null;
+    if (media) {
+      sendingMedia = true;
+      try {
+        await app.sendMedia(media.file, body, reply);
+        clearMedia();
+      } catch (error) {
+        ui.say(describeError(error));
+        return;
+      } finally {
+        sendingMedia = false;
+      }
+    } else {
+      await app.sendText(body, reply);
+    }
     text = '';
     replyTo = null;
     saveDraft();
-    await app.sendText(body, reply);
     ta?.focus();
+  }
+
+  function chooseMedia(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!accepted.split(',').includes(file.type) || !file.size || file.size > 25 * 1024 * 1024) {
+      ui.say('Выбери фото или видео в поддерживаемом формате до 25 МБ');
+      return;
+    }
+    clearMedia();
+    media = { file, url: URL.createObjectURL(file) };
+  }
+
+  function clearMedia() {
+    if (media) URL.revokeObjectURL(media.url);
+    media = null;
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -121,7 +156,7 @@
     await app.sendVoice(res.blob, res.mime, res.durationMs, res.waveform);
   }
 
-  onDestroy(() => rec?.cancel());
+  onDestroy(() => { rec?.cancel(); clearMedia(); });
 </script>
 
 <div class="composer">
@@ -130,9 +165,20 @@
       <Icon name={editing ? 'edit' : 'reply'} size={18} />
       <div class="ctx-t">
         <b>{editing ? 'Редактирование' : `Ответ ${app.nameOf(replyTo!.author_id, replyTo!.group_id)}`}</b>
-        <span>{(editing ?? replyTo)!.kind === 'voice' ? '🎤 Голосовое' : (editing ?? replyTo)!.body}</span>
+        <span>{messageSummary((editing ?? replyTo)!)}</span>
       </div>
       <button type="button" class="icon-btn" onclick={() => { replyTo = null; if (editing) { editing = null; text = ''; } }} aria-label="Отмена"><Icon name="x" size={18} /></button>
+    </div>
+  {/if}
+  {#if media}
+    <div class="ctx attachment">
+      {#if media.file.type.startsWith('image/')}<img src={media.url} alt="" />
+      {:else}
+        <!-- svelte-ignore a11y_media_has_caption (превью пользовательского файла) -->
+        <video src={media.url} muted playsinline preload="metadata" aria-label="Предпросмотр видео"></video>
+      {/if}
+      <div class="ctx-t"><b>{media.file.type.startsWith('image/') ? 'Фото' : 'Видео'}</b><span>{media.file.name}</span></div>
+      <button type="button" class="icon-btn" disabled={sendingMedia} onclick={clearMedia} aria-label="Убрать вложение"><Icon name="x" size={18} /></button>
     </div>
   {/if}
 
@@ -149,17 +195,23 @@
       </div>
       <button type="button" class="send" onclick={() => stopRec(true)} aria-label="Отправить голосовое"><Icon name="send" size={20} /></button>
     {:else}
+      {#if !editing}
+        <input type="file" hidden accept={accepted} bind:this={picker} onchange={chooseMedia} />
+        <button type="button" class="icon-btn attach" aria-label="Прикрепить фото или видео" title="Прикрепить фото или видео" disabled={sendingMedia} onclick={() => picker?.click()}>
+          <Icon name="paperclip" size={22} />
+        </button>
+      {/if}
       <textarea
         bind:this={ta}
         bind:value={text}
         rows="1"
-        placeholder={app.currentChannel?.name && app.currentGroup ? `Сообщение в #${app.currentChannel.name}` : 'Сообщение'}
+        placeholder={media ? 'Добавить подпись' : app.currentChannel?.name && app.currentGroup ? `Сообщение в #${app.currentChannel.name}` : 'Сообщение'}
         {onkeydown}
         oninput={saveDraft}
         maxlength="4000"
       ></textarea>
-      {#if text.trim() || editing}
-        <button type="button" class="send" onclick={submit} aria-label="Отправить"><Icon name={editing ? 'check' : 'send'} size={20} /></button>
+      {#if text.trim() || editing || media}
+        <button type="button" class="send" disabled={sendingMedia} onclick={submit} aria-label="Отправить"><Icon name={editing ? 'check' : 'send'} size={20} /></button>
       {:else}
         <button type="button" class="send mic" onclick={startRec} aria-label="Записать голосовое" title="Записать голосовое"><Icon name="mic" size={20} /></button>
       {/if}
@@ -176,12 +228,14 @@
   .ctx-t { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
   .ctx-t b { color: var(--accent); }
   .ctx-t span { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .attachment img, .attachment video { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
+  .attach { flex: none; height: 40px; }
   .bar {
     display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 16px; min-height: 52px;
     background: var(--bg-elev); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 2px 12px rgba(0,0,0,.12);
   }
   textarea {
-    flex: 1; resize: none; border: 0; outline: none; background: transparent; padding: 9px 0; max-height: 180px;
+    flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; padding: 9px 0; max-height: 180px;
     line-height: 1.4; font-size: 15px;
   }
   textarea::placeholder { color: var(--text-faint); }
@@ -201,5 +255,5 @@
   .live span { width: 3px; flex: none; border-radius: 2px; background: var(--accent); }
   .limit { font-size: 12px; flex: none; }
   @keyframes blink { 50% { opacity: .3; } }
-  @media (max-width: 760px) { .composer { padding-left: 10px; padding-right: 10px; } .limit { display: none; } }
+  @media (max-width: 760px) { .composer { padding-left: 10px; padding-right: 10px; } .bar { gap: 5px; padding-left: 6px; } .limit { display: none; } }
 </style>

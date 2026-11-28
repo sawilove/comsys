@@ -1,16 +1,19 @@
 {
   "name": "comsys",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:native": "vite build --mode native",
+    "tauri": "tauri",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tauri-apps/cli": "2.12.6",
     "@tsconfig/svelte": "^5.0.9",
     "@types/node": "^26.6.6",
     "svelte": "^5.59.1",

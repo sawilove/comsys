@@ -6,6 +6,7 @@
   import ProfileSettings from './ProfileSettings.svelte';
   import ThemeSettings from './ThemeSettings.svelte';
   import Icon from './Icon.svelte';
+  import BrandMark from './BrandMark.svelte';
   import { askNotificationPermission, notificationsSupported } from '../util/notify';
   import { describeError } from '../util/format';
 
@@ -73,6 +74,18 @@
     </section>
   {/if}
 
+  <section class="about">
+    <h3>О приложении</h3>
+    <div class="about-brand">
+      <BrandMark size={42} />
+      <div><b>COMSYS</b><div class="muted small">Версия {__COMSYS_VERSION__} · {__COMSYS_NATIVE__ ? 'Приложение' : 'Веб-версия'}</div></div>
+    </div>
+    <p class="muted small">Закрытый мессенджер с открытым исходным кодом. Лицензия AGPL‑3.0.</p>
+    <div class="links">
+      <a href="https://github.com/sawilove/comsys" target="_blank" rel="noreferrer">Исходный код</a>
+      <a href="https://github.com/sawilove/comsys/releases" target="_blank" rel="noreferrer">Скачать приложение</a>
+    </div>
+  </section>
   <section class="foot">
     <span class="muted small">{api.kind === 'demo' ? 'Демо-режим, данные в этом браузере' : app.online ? 'Подключено к серверу' : 'Нет связи с сервером'}</span>
     <button type="button" class="btn danger" onclick={() => { ui.close(); void app.signOut(); }}><Icon name="logout" size={18} /> Выйти</button>
@@ -86,6 +99,9 @@
   .inline .input { flex: 1; min-width: 0; }
   .sel { flex: none !important; width: 140px; }
   .small { font-size: 12.5px; margin: 8px 0 0; }
+  .about-brand, .links { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .about-brand .small { margin: 0; }
+  .links { margin-top: 10px; font-size: 13px; }
   .invite { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--accent-soft); }
   .invite code { font-size: 17px; font-weight: 700; letter-spacing: .08em; }
   .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid var(--border); }

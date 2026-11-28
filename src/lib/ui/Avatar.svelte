@@ -21,5 +21,5 @@
 </div>
 
 <style>
-  .av { flex: none; display: grid; place-items: center; color: #fff; font-weight: 700; overflow: hidden; user-select: none; letter-spacing: -.02em; }
+  .av { position: relative; flex: none; display: grid; place-items: center; color: #fff; font-weight: 700; overflow: hidden; user-select: none; letter-spacing: -.02em; }
 </style>

@@ -11,6 +11,7 @@ import {
   type ProfileImages,
   type ProfilePatch,
   type RealtimeHandlers,
+  type ReadReceipt,
 } from './types';
 import { MEDIA_PROVIDER, SUPABASE_ANON_KEY, SUPABASE_URL, USERNAME_EMAIL_DOMAIN } from './config';
 import { PROFILE_MEDIA_BUCKET, PROFILE_MEDIA_PREFIX, profileImageExtension } from '../util/profile';
@@ -24,6 +25,10 @@ function norm(m: Message): Message {
 const MSG_COLUMNS = 'id,channel_id,group_id,author_id,kind,body,attachments,reply_to,created_at,edited_at,deleted_at';
 
 function extFor(mime: string): string {
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime.startsWith('image/')) return mime.slice(6);
+  if (mime === 'video/mp4') return 'mp4';
+  if (mime === 'video/quicktime') return 'mov';
   if (mime.includes('webm')) return 'webm';
   if (mime.includes('ogg')) return 'ogg';
   if (mime.includes('mp4') || mime.includes('aac') || mime.includes('m4a')) return 'm4a';
@@ -90,7 +95,7 @@ export class SupabaseBackend implements Backend {
 
   async listProfiles(): Promise<Profile[]> {
     return this.check(
-      await this.sb.from('profiles').select('id,username,display_name,avatar_url,profile,status,is_admin').order('display_name'),
+      await this.sb.from('profiles').select('id,username,display_name,avatar_url,profile,status,is_admin,is_developer').order('display_name'),
     ) as Profile[];
   }
 
@@ -206,6 +211,14 @@ export class SupabaseBackend implements Backend {
     return norm(this.check(res) as Message);
   }
 
+  async listReceipts(channelId: string) {
+    return this.check(await this.sb.from('read_receipts').select('channel_id,user_id,message_id,message_at').eq('channel_id', channelId)) as ReadReceipt[];
+  }
+
+  async markMessageRead(messageId: string) {
+    this.check(await this.sb.rpc('mark_message_read', { p_message: messageId }));
+  }
+
   async editMessage(id: string, body: string) {
     this.check(await this.sb.from('messages').update({ body }).eq('id', id));
   }
@@ -254,6 +267,9 @@ export class SupabaseBackend implements Backend {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, () => h.onStructureChanged())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'channels' }, () => h.onStructureChanged())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => h.onStructureChanged())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'read_receipts' }, ({ new: row }) => {
+        if ('message_id' in row) h.onReceipt(row as ReadReceipt);
+      })
       .subscribe((status) => h.onStatus(status === 'SUBSCRIBED'));
     return () => {
       this.sb.removeChannel(ch);

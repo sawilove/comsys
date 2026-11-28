@@ -125,6 +125,14 @@ export class DemoBackend implements Backend {
     return structuredClone(this.db.profiles);
   }
 
+  async listReceipts() {
+    return [];
+  }
+
+  async markMessageRead() {
+    // В демо нет второго подключённого клиента.
+  }
+
   async updateMyProfile(patch: ProfilePatch, images: ProfileImages = {}) {
     const me = this.me();
     const current = this.db.profiles.find((p) => p.id === me)!;

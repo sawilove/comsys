@@ -12,9 +12,25 @@
   let imageSize = $state<{ width: number; height: number }>();
   let failed = $state(false);
   let drag: { pointer: number; x: number; y: number; start: ProfileCrop; travelX: number; travelY: number } | null = null;
+  const fingers = new Map<number, { x: number; y: number }>();
+  let pinch: { distance: number; zoom: number } | null = null;
+
+  function pinchDistance() {
+    const [first, second] = fingers.values();
+    return first && second ? Math.hypot(first.x - second.x, first.y - second.y) : 0;
+  }
 
   function start(event: PointerEvent) {
-    if (!frame || !imageSize || !event.isPrimary || event.button !== 0) return;
+    if (!frame || !imageSize || event.button !== 0 || fingers.size >= 2) return;
+    if (event.pointerType === 'touch') {
+      fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      frame.setPointerCapture(event.pointerId);
+      if (fingers.size === 2) {
+        pinch = { distance: Math.max(1, pinchDistance()), zoom: edit.zoom };
+        drag = null;
+        return;
+      }
+    }
     const { width, height } = frame.getBoundingClientRect();
     const scale = Math.max(width / imageSize.width, height / imageSize.height) * edit.zoom;
     drag = {
@@ -25,9 +41,22 @@
   }
 
   function move(event: PointerEvent) {
+    if (fingers.has(event.pointerId)) {
+      fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pinch && fingers.size === 2) {
+        edit.zoom = clamp(pinch.zoom * pinchDistance() / pinch.distance, 1, maxCropZoom);
+        return;
+      }
+    }
     if (!drag || drag.pointer !== event.pointerId) return;
     if (drag.travelX > 1) edit.x = clamp(drag.start.x - (event.clientX - drag.x) * 100 / drag.travelX, 0, 100);
     if (drag.travelY > 1) edit.y = clamp(drag.start.y - (event.clientY - drag.y) * 100 / drag.travelY, 0, 100);
+  }
+
+  function release(event: PointerEvent) {
+    fingers.delete(event.pointerId);
+    pinch = null;
+    if (drag?.pointer === event.pointerId) drag = null;
   }
 </script>
 
@@ -38,11 +67,12 @@
   </div>
   <div class="stage">
     <div role="presentation" class="frame" class:round={kind === 'avatar'} bind:this={frame} onpointerdown={start} onpointermove={move}
-      onlostpointercapture={() => { drag = null; }}>
+      onlostpointercapture={release}>
       <ProfileImage {reference} crop={edit} onload={(size) => { imageSize = size; }} onfailure={() => { failed = true; }} />
       <span class="grid" aria-hidden="true"></span>
     </div>
   </div>
+  <p class="hint muted">Перетащи изображение, чтобы выбрать кадр. На телефоне можно менять масштаб двумя пальцами.</p>
   {#if failed}<p class="error" role="alert">Не удалось открыть изображение.</p>{/if}
   <div class="controls">
     <label>Масштаб <output>{Math.round(edit.zoom * 100)}%</output><input type="range" min="1" max={maxCropZoom} step=".01" bind:value={edit.zoom} /></label>
@@ -60,6 +90,7 @@
   .header, .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .header { justify-content: space-between; }
   .reset { color: var(--text-muted); text-decoration: underline; font-size: 13px; }
+  .hint { font-size: 12px; margin: 0; }
   .stage { display: grid; place-items: center; min-height: 130px; padding: 12px; border-radius: 10px; background: var(--bg-sunken); }
   .frame { position: relative; width: 100%; aspect-ratio: 7 / 2; overflow: hidden; touch-action: none; cursor: grab; outline: 1px solid var(--text-muted); background: var(--bg); user-select: none; }
   .frame:active { cursor: grabbing; }

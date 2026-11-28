@@ -3,14 +3,14 @@
   import { ui } from '../state/ui.svelte';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
-  import { shortTime } from '../util/format';
+  import { messageSummary, shortTime } from '../util/format';
   import type { Message } from '../api';
 
   function preview(m: Message | undefined, groupId: string) {
     if (!m) return 'Нет сообщений';
     if (m.deleted_at) return 'Сообщение удалено';
     const who = m.author_id === app.meId ? 'Вы: ' : app.groups.find((g) => g.id === groupId)?.kind === 'group' ? `${app.nameOf(m.author_id, groupId)}: ` : '';
-    return who + (m.kind === 'voice' ? '🎤 Голосовое' : m.body);
+    return who + messageSummary(m);
   }
 </script>
 

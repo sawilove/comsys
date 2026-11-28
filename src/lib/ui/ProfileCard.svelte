@@ -26,6 +26,7 @@
     </div>
     <strong>{person.display_name}</strong>
     <span class="muted">@{person.username}{person.is_admin ? ' · админ сети' : ''}</span>
+    {#if person.is_developer}<span class="mark developer"><code>&lt;/&gt;</code> Разработчик</span>{/if}
     {#if badge}<span class="mark">{badge}</span>{/if}
     {#if person.profile?.bio}<p>{person.profile.bio}</p>{/if}
   </div>
@@ -42,5 +43,7 @@
   strong { font-size: 18px; }
   .muted { font-size: 13px; }
   .mark { margin-top: 4px; padding: 3px 8px; border-radius: 10px; background: var(--bg-active); font-size: 13px; }
+  .developer { background: #8056ef28; color: var(--text); }
+  .developer code { color: #aa88ff; font-weight: 700; }
   p { margin: 4px 0 0; white-space: pre-wrap; }
 </style>

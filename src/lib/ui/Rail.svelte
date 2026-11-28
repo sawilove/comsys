@@ -3,12 +3,13 @@
   import { ui } from '../state/ui.svelte';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
+  import BrandMark from './BrandMark.svelte';
 </script>
 
 <nav class="rail scroll" aria-label="Группы">
   <button type="button" class="item" class:active={app.groupId === null} onclick={() => app.openGroup(null)} title="Личные сообщения">
     <span class="pill"></span>
-    <span class="home"><Icon name="chat" size={22} /></span>
+    <span class="home"><BrandMark size={42} /></span>
     {#if app.dmUnread}<span class="badge">{app.dmUnread}</span>{/if}
   </button>
   <div class="sep"></div>

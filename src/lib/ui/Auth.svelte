@@ -2,6 +2,7 @@
   import { app } from '../state/app.svelte';
   import { api } from '../api';
   import { describeError } from '../util/format';
+  import BrandMark from './BrandMark.svelte';
 
   const initialCode = new URLSearchParams(location.search).get('invite') ?? '';
   let mode = $state<'login' | 'invite'>(api.kind === 'demo' || initialCode ? 'invite' : 'login');
@@ -33,9 +34,9 @@
   <div class="glow"></div>
   <form class="card" onsubmit={submit}>
     <div class="brand">
-      <div class="logo">C</div>
+      <BrandMark size={52} />
       <div>
-        <h1>C-COMSYS</h1>
+        <h1>COMSYS</h1>
         <p class="muted">Закрытый мессенджер для своих</p>
       </div>
     </div>
@@ -92,7 +93,6 @@
     background: var(--bg-elev); border: 1px solid var(--border); border-radius: 24px; padding: 28px; box-shadow: var(--shadow);
   }
   .brand { display: flex; gap: 14px; align-items: center; margin-bottom: 4px; }
-  .logo { width: 48px; height: 48px; border-radius: 15px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
   .brand p { margin: 2px 0 0; font-size: 14px; }
   .demo { font-size: 13px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--text); }
