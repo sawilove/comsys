@@ -8,6 +8,8 @@
   import NewDM from './NewDM.svelte';
   import GroupInfo from './GroupInfo.svelte';
   import Settings from './Settings.svelte';
+  import Modal from './Modal.svelte';
+  import ProfileCard from './ProfileCard.svelte';
   import Icon from './Icon.svelte';
 </script>
 
@@ -34,6 +36,14 @@
 {#if ui.modal?.type === 'new-dm'}<NewDM />{/if}
 {#if ui.modal?.type === 'group-info'}<GroupInfo groupId={ui.modal.groupId} />{/if}
 {#if ui.modal?.type === 'settings'}<Settings />{/if}
+{#if ui.modal?.type === 'profile'}
+  {@const person = app.profiles[ui.modal.userId]}
+  {#if person}
+    <Modal title="Профиль" onclose={() => ui.close()}>
+      <ProfileCard {person} />
+    </Modal>
+  {/if}
+{/if}
 
 {#if ui.toast}<div class="toast" role="status">{ui.toast}</div>{/if}
 

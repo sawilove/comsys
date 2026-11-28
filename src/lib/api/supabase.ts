@@ -8,9 +8,12 @@ import {
   type NetworkSnapshot,
   type NewMessage,
   type Profile,
+  type ProfileImages,
+  type ProfilePatch,
   type RealtimeHandlers,
 } from './types';
 import { MEDIA_PROVIDER, SUPABASE_ANON_KEY, SUPABASE_URL, USERNAME_EMAIL_DOMAIN } from './config';
+import { PROFILE_MEDIA_BUCKET, PROFILE_MEDIA_PREFIX, profileImageExtension } from '../util/profile';
 
 /** Realtime и REST отдают время в разном виде: приводим к одному ISO, чтобы сортировка и курсор совпадали. */
 function norm(m: Message): Message {
@@ -82,6 +85,7 @@ export class SupabaseBackend implements Backend {
   async signOut() {
     await this.sb.removeAllChannels();
     await this.sb.auth.signOut();
+    this.urlCache.clear();
   }
 
   async listProfiles(): Promise<Profile[]> {
@@ -90,9 +94,57 @@ export class SupabaseBackend implements Backend {
     ) as Profile[];
   }
 
-  async updateMyProfile(patch: Partial<Pick<Profile, 'display_name' | 'avatar_url' | 'profile' | 'status'>>) {
+  async updateMyProfile(patch: ProfilePatch, images: ProfileImages = {}) {
     const id = await this.currentUserId();
-    this.check(await this.sb.from('profiles').update(patch).eq('id', id!));
+    if (!id) throw new ApiError('unauthorized');
+    const current = this.check(await this.sb.from('profiles').select('avatar_url,profile').eq('id', id).single()) as Pick<Profile, 'avatar_url' | 'profile'>;
+    const next = { ...patch };
+    if (patch.profile || images.banner !== undefined) next.profile = { ...current.profile, ...patch.profile };
+    const bucket = this.sb.storage.from(PROFILE_MEDIA_BUCKET);
+    const uploaded: string[] = [];
+    const replaced: string[] = [];
+    const upload = async (file: File | null, previous: string | null | undefined) => {
+      if (previous?.startsWith(`${PROFILE_MEDIA_PREFIX}${id}/`)) {
+        replaced.push(previous.slice(PROFILE_MEDIA_PREFIX.length));
+      }
+      if (!file) return null;
+      const path = `${id}/${crypto.randomUUID()}.${profileImageExtension(file)}`;
+      this.check(await bucket.upload(path, file, { contentType: file.type, upsert: false }));
+      uploaded.push(path);
+      return PROFILE_MEDIA_PREFIX + path;
+    };
+    try {
+      if (images.avatar !== undefined) next.avatar_url = await upload(images.avatar, current.avatar_url);
+      if (images.banner !== undefined && next.profile) {
+        const banner = await upload(images.banner, current.profile.banner);
+        if (banner) next.profile.banner = banner;
+        else delete next.profile.banner;
+      }
+    } catch (error) {
+      if (uploaded.length) await bucket.remove(uploaded).catch(() => undefined);
+      throw error;
+    }
+    let update = this.sb.from('profiles').update(next).eq('id', id);
+    if (next.profile) update = update.eq('profile', JSON.stringify(current.profile));
+    if (images.avatar !== undefined) {
+      update = current.avatar_url === null ? update.is('avatar_url', null) : update.eq('avatar_url', current.avatar_url);
+    }
+    const updated = this.check(await update.select('id').maybeSingle());
+    if (!updated) {
+      if (uploaded.length) await bucket.remove(uploaded).catch(() => undefined);
+      throw new Error('Профиль изменился. Обнови страницу и повтори сохранение.');
+    }
+    if (replaced.length) await bucket.remove(replaced).catch(() => undefined);
+  }
+
+  async profileImageUrl(reference: string) {
+    if (!reference.startsWith(PROFILE_MEDIA_PREFIX)) return /^https:\/\//i.test(reference) ? reference : '';
+    const cached = this.urlCache.get(reference);
+    if (cached && cached.until > Date.now()) return cached.url;
+    const path = reference.slice(PROFILE_MEDIA_PREFIX.length);
+    const { signedUrl } = this.check(await this.sb.storage.from(PROFILE_MEDIA_BUCKET).createSignedUrl(path, 3600))!;
+    this.urlCache.set(reference, { url: signedUrl, until: Date.now() + 50 * 60 * 1000 });
+    return signedUrl;
   }
 
   async snapshot(): Promise<NetworkSnapshot> {
@@ -201,6 +253,7 @@ export class SupabaseBackend implements Backend {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => h.onStructureChanged())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, () => h.onStructureChanged())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'channels' }, () => h.onStructureChanged())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => h.onStructureChanged())
       .subscribe((status) => h.onStatus(status === 'SUBSCRIBED'));
     return () => {
       this.sb.removeChannel(ch);
