@@ -25,7 +25,7 @@
   </button>
   <div class="grow"></div>
   <button type="button" class="item" onclick={() => ui.open({ type: 'settings' })} title="Настройки">
-    {#if app.me}<Avatar id={app.me.id} name={app.me.display_name} url={app.me.avatar_url} size={40} />{/if}
+    {#if app.me}<Avatar id={app.me.id} name={app.me.display_name} url={app.me.avatar_url} crop={app.me.profile?.avatarCrop} size={40} />{/if}
     <span class="dot" class:off={!app.online} title={app.online ? 'В сети' : 'Нет связи'}></span>
   </button>
 </nav>

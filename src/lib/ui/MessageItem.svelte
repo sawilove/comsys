@@ -46,7 +46,7 @@
       {#if !continued}
         <button type="button" disabled={!author} aria-label={'Открыть профиль ' + name}
           onclick={() => ui.open({ type: 'profile', userId: m.author_id })}>
-          <Avatar id={m.author_id} name={name} url={author?.avatar_url} color={author?.profile?.accent} size={34} />
+          <Avatar id={m.author_id} name={name} url={author?.avatar_url} crop={author?.profile?.avatarCrop} color={author?.profile?.accent} size={34} />
         </button>
       {/if}
     </div>

@@ -27,7 +27,7 @@
         {@const last = ch ? app.last[ch.id] : undefined}
         {@const n = app.groupUnread(g.id)}
         <button type="button" class="row" class:active={ch && app.channelId === ch.id} onclick={() => ch && app.openChannel(ch.id)}>
-          <Avatar id={p?.id ?? g.id} name={p?.display_name ?? '?'} url={p?.avatar_url} size={44} />
+          <Avatar id={p?.id ?? g.id} name={p?.display_name ?? '?'} url={p?.avatar_url} crop={p?.profile?.avatarCrop} size={44} />
           <div class="meta">
             <div class="top"><b>{app.groupTitle(g)}</b>{#if last}<span class="time">{shortTime(last.created_at)}</span>{/if}</div>
             <div class="bottom"><span class="prev">{preview(last, g.id)}</span>{#if n}<span class="badge">{n}</span>{/if}</div>
